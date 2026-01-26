@@ -1,0 +1,61 @@
+MarryFKill_Quiz/
+│
+├── 📱 Application Core
+│   ├── app.py                          (17 KB) - Main Flask application
+│   ├── database.py                     (5.5 KB) - Database models & ORM
+│   └── requirements.txt                (174 B) - Python dependencies
+│
+├── 🐳 Docker & Deployment
+│   ├── Dockerfile                      Container image definition
+│   ├── docker-compose.yml              Easy deployment config
+│   ├── .dockerignore                   Docker build exclusions
+│   └── .gitignore                      Git exclusions
+│
+├── 🎨 Frontend Templates
+│   └── templates/
+│       ├── base.html                   Base template with layout
+│       ├── index.html                  Home/landing page
+│       ├── admin.html                  Admin control panel
+│       └── poll.html                   User poll interface
+│
+├── 💅 Styling
+│   └── static/css/
+│       └── style.css                   Complete responsive CSS (550+ lines)
+│
+├── ⚡ JavaScript
+│   └── static/js/
+│       ├── main.js                     Common utilities & WebSocket init
+│       ├── admin.js                    Admin panel functionality (340+ lines)
+│       └── poll.js                     User poll with drag-drop (240+ lines)
+│
+├── 🖼️ Images Directory
+│   └── images/
+│       └── README.txt                  Instructions for adding images
+│
+├── 📚 Documentation
+│   ├── README.md                       Complete documentation (400+ lines)
+│   ├── QUICKSTART.md                   Quick start guide
+│   ├── PROJECT_OVERVIEW.md             Technical overview & architecture
+│   ├── DEPLOYMENT_GUIDE.md             Production deployment guide
+│   └── INSTALLATION_COMPLETE.txt       This summary
+│
+├── 🔧 Setup & Testing
+│   ├── setup.sh                        Linux/Mac setup script
+│   ├── setup.bat                       Windows setup script
+│   ├── run_dev.py                      Development server launcher
+│   └── test_install.py                 Installation verification
+│
+└── 🗄️ Runtime (Auto-created)
+    └── data/
+        └── fmk_quiz.db                 SQLite database (created on first run)
+
+Total Files: 25
+Total Lines: 4,254+
+Total Size: ~150 KB (excluding runtime data)
+
+Key Technologies:
+├── Backend: Flask 3.0 + Flask-SocketIO + SQLAlchemy
+├── Frontend: Vanilla JS + Socket.IO + HTML5 Drag & Drop
+├── Database: SQLite
+├── Server: Gunicorn + Eventlet
+└── Deployment: Docker + Docker Compose

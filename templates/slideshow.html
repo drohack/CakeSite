@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block title %}Slideshow - FMK Quiz{% endblock %}
+
+{% block content %}
+<div class="slideshow-page">
+    <header class="slideshow-header">
+        <a href="/" class="btn btn-secondary btn-sm">Home</a>
+        <div class="slideshow-controls">
+            <button id="prev-btn" class="btn btn-secondary">← Previous</button>
+            <button id="next-btn" class="btn btn-primary">Next →</button>
+            <button id="show-grid-btn" class="btn btn-info">View All</button>
+        </div>
+    </header>
+
+    <div id="slideshow-container" class="slideshow-container">
+        <h1 id="image-name" class="image-name"></h1>
+        <div class="image-wrapper">
+            <img id="current-image" src="" alt="Slideshow Image" class="slideshow-image">
+        </div>
+        <div class="slideshow-info">
+            <span id="slide-counter">0 / 0</span>
+        </div>
+    </div>
+
+    <div id="no-images" class="no-images" style="display: none;">
+        <h2>No images available</h2>
+        <p>Add images to the images/ folder to start the slideshow</p>
+    </div>
+
+    <div id="grid-view" class="grid-view" style="display: none;">
+        <h1 class="grid-title">All Images</h1>
+        <div id="grid-container" class="grid-container"></div>
+        <button id="back-to-slideshow" class="btn btn-primary btn-large">Back to Slideshow</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Override container from base template */
+    .container {
+        max-width: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+    }
+
+    .slideshow-page {
+        background: #000;
+        color: #fff;
+        height: 100vh;
+        width: 100vw;
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 0;
+        left: 0;
+    }
+
+    .slideshow-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 15px;
+        background: rgba(0, 0, 0, 0.9);
+        flex-shrink: 0;
+    }
+
+    .slideshow-controls {
+        display: flex;
+        gap: 10px;
+    }
+
+    .slideshow-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 15px 15px 15px;
+        overflow: hidden;
+        min-height: 0;
+    }
+
+    .image-name {
+        font-size: clamp(1.5rem, 4vw, 2.5rem);
+        margin: 0 0 10px 0;
+        text-align: center;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        animation: fadeIn 0.5s ease;
+        flex-shrink: 0;
+    }
+
+    .image-wrapper {
+        flex: 1;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 0;
+        margin-bottom: 10px;
+    }
+
+    .slideshow-image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: 4px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+        animation: fadeIn 0.5s ease;
+    }
+
+    .slideshow-info {
+        margin: 0;
+        padding: 5px 0;
+        font-size: clamp(1rem, 2vw, 1.25rem);
+        opacity: 0.7;
+        flex-shrink: 0;
+    }
+
+    .no-images {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 80vh;
+        text-align: center;
+    }
+
+    /* Grid View Styles */
+    .grid-view {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 20px;
+        overflow-y: auto;
+        animation: fadeIn 0.5s ease;
+    }
+
+    .grid-title {
+        font-size: clamp(2rem, 5vw, 3rem);
+        text-align: center;
+        margin: 0 0 30px 0;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    }
+
+    .grid-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 20px;
+        max-width: 1400px;
+        margin: 0 auto;
+        width: 100%;
+    }
+
+    .grid-item {
+        position: relative;
+        aspect-ratio: 1;
+        overflow: hidden;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        transition: transform 0.3s ease;
+        cursor: pointer;
+    }
+
+    .grid-item:hover {
+        transform: scale(1.05);
+    }
+
+    .grid-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .grid-item-name {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+        padding: 10px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-align: center;
+        color: #fff;
+    }
+
+    #back-to-slideshow {
+        margin: 30px auto 20px auto;
+        align-self: center;
+    }
+
+    .btn-large {
+        padding: 15px 30px;
+        font-size: 1.125rem;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @media (max-width: 768px) {
+        .image-name {
+            font-size: 2rem;
+        }
+
+        .slideshow-controls {
+            flex-wrap: wrap;
+        }
+
+        .slideshow-controls .btn {
+            font-size: 0.875rem;
+        }
+
+        .grid-container {
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .grid-title {
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/slideshow.js') }}"></script>
+{% endblock %}

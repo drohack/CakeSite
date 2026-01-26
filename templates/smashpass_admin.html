@@ -1,0 +1,525 @@
+{% extends "base.html" %}
+
+{% block title %}Smash or Pass Admin - FMK Quiz{% endblock %}
+
+{% block content %}
+<div class="smashpass-admin-page">
+    <header class="admin-header">
+        <div class="header-left">
+            <a href="/" class="btn btn-secondary btn-sm">Home</a>
+            <h1>Smash or Pass</h1>
+        </div>
+        <div class="header-right">
+            <button id="create-session" class="btn btn-success">Create Session</button>
+            <button id="next-image" class="btn btn-primary" disabled>Next →</button>
+        </div>
+    </header>
+
+    <div id="sp-status" class="sp-status">
+        <div id="status-info">No active session</div>
+    </div>
+
+    <div id="sp-initial-qr" class="sp-initial-qr">
+        <h2>Scan to Join</h2>
+        <img id="sp-qr-image-main" alt="QR Code">
+        <p id="sp-qr-url-main"></p>
+    </div>
+
+    <div id="sp-main-content" class="sp-main-content" style="display: none;">
+        <div class="sp-image-section">
+            <h2 id="current-name"></h2>
+            <div class="image-container">
+                <img id="current-sp-image" src="" alt="Current Image">
+            </div>
+        </div>
+
+        <div class="sp-results-section">
+            <h3>Live Results</h3>
+            <div class="results-bars-container">
+                <div class="result-item">
+                    <div class="result-label">🔥 Smash</div>
+                    <div class="vote-bar">
+                        <div id="smash-bar" class="bar smash-bar" style="height: 0%">
+                            <span id="smash-count">0</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">👎 Pass</div>
+                    <div class="vote-bar">
+                        <div id="pass-bar" class="bar pass-bar" style="height: 0%">
+                            <span id="pass-count">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="total-votes">
+                Total: <span id="total-votes">0</span>
+            </div>
+        </div>
+
+        <div class="sp-qr-section">
+            <h3>Scan to Join</h3>
+            <img id="sp-qr-image" alt="QR Code">
+            <p id="sp-qr-url"></p>
+        </div>
+    </div>
+
+    <div id="sp-progress" class="sp-progress">
+        <span id="progress-counter">0 / 0</span>
+    </div>
+
+    <div id="sp-results-page" class="sp-results-page" style="display: none;">
+        <h2>Final Results</h2>
+        <div class="results-grid">
+            <div class="results-section smashes-section">
+                <h3>🔥 Smashes</h3>
+                <div id="smashes-list" class="results-list"></div>
+            </div>
+
+            <div class="results-divider"></div>
+
+            <div class="results-section passes-section">
+                <h3>👎 Passes</h3>
+                <div id="passes-list" class="results-list"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/smashpass_admin.js') }}"></script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Override container from base template */
+    html, body {
+        background: #000 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        height: 100%;
+        overflow: hidden;
+    }
+
+    .container {
+        max-width: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        height: 100vh;
+    }
+
+    .smashpass-admin-page {
+        background: #000;
+        color: #fff;
+        padding: 0;
+        height: 100vh;
+        width: 100%;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .admin-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 15px;
+        background: rgba(0, 0, 0, 0.9);
+        border-bottom: 1px solid #333;
+        flex-shrink: 0;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .header-left h1 {
+        margin: 0;
+        font-size: 1.5rem;
+        color: #fff;
+    }
+
+    .header-right {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .sp-status {
+        padding: 8px 15px;
+        background: rgba(255, 255, 255, 0.1);
+        border-bottom: 1px solid #333;
+        font-size: 0.9rem;
+        color: #ccc;
+        flex-shrink: 0;
+    }
+
+    #status-info {
+        margin: 0;
+    }
+
+    #status-info p {
+        display: inline;
+        margin: 0 15px 0 0;
+    }
+
+    .sp-initial-qr {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px;
+    }
+
+    .sp-initial-qr h2 {
+        font-size: 2rem;
+        margin-bottom: 30px;
+        color: #fff;
+    }
+
+    .sp-initial-qr img {
+        max-width: 400px;
+        width: 100%;
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
+
+    .sp-initial-qr p {
+        font-size: 1.25rem;
+        color: #3498db;
+        word-break: break-all;
+        text-align: center;
+    }
+
+    .sp-main-content {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr;
+        gap: 20px;
+        padding: 20px;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .sp-progress {
+        padding: 10px;
+        text-align: center;
+        font-size: 1.25rem;
+        color: #ccc;
+        background: rgba(0, 0, 0, 0.9);
+        flex-shrink: 0;
+    }
+
+    .sp-image-section {
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    #current-name {
+        font-size: clamp(1.5rem, 3vw, 2rem);
+        margin: 0 0 15px 0;
+        color: #fff;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        flex-shrink: 0;
+    }
+
+    .image-container {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 0;
+    }
+
+    #current-sp-image {
+        max-width: 100%;
+        max-height: 100%;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: 4px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .sp-results-section {
+        display: flex;
+        flex-direction: column;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+    }
+
+    .sp-results-section h3 {
+        margin: 0 0 15px 0;
+        font-size: 1.25rem;
+        color: #fff;
+        text-align: center;
+    }
+
+    .results-bars-container {
+        flex: 1;
+        display: flex;
+        gap: 20px;
+        align-items: stretch;
+        justify-content: center;
+        min-height: 0;
+    }
+
+    .sp-qr-section {
+        text-align: center;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+    }
+
+    .sp-qr-section h3 {
+        margin: 0 0 15px 0;
+        font-size: 1.25rem;
+        color: #fff;
+    }
+
+    #sp-qr-image {
+        width: 100%;
+        max-width: 350px;
+        height: auto;
+        margin-bottom: 15px;
+        background: white;
+        padding: 10px;
+        border-radius: 8px;
+    }
+
+    #sp-qr-url {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #3498db;
+        word-break: break-all;
+    }
+
+    .result-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex: 1;
+        height: 100%;
+    }
+
+    .result-label {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 10px;
+        color: #000;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 8px 16px;
+        border-radius: 6px;
+        flex-shrink: 0;
+    }
+
+    .vote-bar {
+        width: 80px;
+        flex: 1;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 20px;
+        overflow: hidden;
+        position: relative;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+    }
+
+    .bar {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 700;
+        font-size: 1.25rem;
+        transition: height 0.5s ease;
+        text-shadow: 2px 2px 3px rgba(0, 0, 0, 0.8);
+        min-height: 30px;
+    }
+
+    .smash-bar {
+        background: linear-gradient(to top, #c0392b, #e74c3c);
+    }
+
+    .pass-bar {
+        background: linear-gradient(to top, #7f8c8d, #95a5a6);
+    }
+
+    .bar span {
+        min-width: 30px;
+    }
+
+    .total-votes {
+        font-size: 1.25rem;
+        font-weight: 600;
+        text-align: center;
+        padding: 15px;
+        background: rgba(52, 152, 219, 0.3);
+        color: white;
+        border-radius: 8px;
+        margin-top: auto;
+        flex-shrink: 0;
+    }
+
+    /* Results Page Styles */
+    .sp-results-page {
+        flex: 1;
+        padding: 30px;
+        overflow-y: auto;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .sp-results-page h2 {
+        text-align: center;
+        font-size: 2.5rem;
+        margin: 0 0 40px 0;
+        color: #fff;
+    }
+
+    .results-grid {
+        display: grid;
+        grid-template-columns: 1fr 2px 1fr;
+        gap: 40px;
+        width: 100%;
+    }
+
+    .results-divider {
+        background: linear-gradient(to bottom, transparent, #666, transparent);
+        width: 2px;
+    }
+
+    .results-section {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .smashes-section {
+        border-right: none;
+    }
+
+    .passes-section {
+        border-left: none;
+    }
+
+    .results-section h3 {
+        color: #fff;
+        margin: 0 0 30px 0;
+        font-size: 2rem;
+        text-align: center;
+    }
+
+    .results-section p {
+        color: #ccc;
+        text-align: center;
+        font-size: 1.25rem;
+    }
+
+    .results-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 20px;
+    }
+
+    .result-card {
+        text-align: center;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: transform 0.3s ease;
+    }
+
+    .result-card:hover {
+        transform: scale(1.05);
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .result-card img {
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+        border-radius: 8px;
+        margin-bottom: 10px;
+    }
+
+    .result-card .name {
+        font-weight: 600;
+        margin-bottom: 5px;
+        color: #fff;
+        font-size: 1rem;
+    }
+
+    .result-card .votes {
+        font-size: 0.875rem;
+        color: #ccc;
+    }
+
+    @media (max-width: 1200px) {
+        .sp-main-content {
+            grid-template-columns: 1fr;
+        }
+
+        .sp-qr-section {
+            order: -1;
+        }
+
+        .results-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .results-divider {
+            display: none;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .header-right {
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .header-right .btn {
+            font-size: 0.75rem;
+            padding: 6px 10px;
+        }
+
+        #current-name {
+            font-size: 1.5rem;
+        }
+
+        .sp-results-page {
+            padding: 20px;
+        }
+
+        .sp-results-page h2 {
+            font-size: 2rem;
+        }
+
+        .results-section h3 {
+            font-size: 1.5rem;
+        }
+
+        .results-list {
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        }
+    }
+</style>
+{% endblock %}

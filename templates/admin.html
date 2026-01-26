@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Panel - FMK Quiz{% endblock %}
+
+{% block content %}
+<div class="admin-page">
+    <header class="admin-header">
+        <h1>Admin Panel</h1>
+        <a href="/" class="btn btn-secondary">Home</a>
+    </header>
+
+    <div class="admin-tabs">
+        <button class="tab-btn active" data-tab="images">Manage Images</button>
+        <button class="tab-btn" data-tab="poll">Poll Control</button>
+        <button class="tab-btn" data-tab="results">Results</button>
+    </div>
+
+    <!-- IMAGES TAB -->
+    <div class="tab-content active" id="images-tab">
+        <h2>Image Management</h2>
+        <div id="images-grid" class="images-grid">
+            <!-- Images will be loaded here -->
+        </div>
+    </div>
+
+    <!-- POLL CONTROL TAB -->
+    <div class="tab-content" id="poll-tab">
+        <h2>Poll Control</h2>
+
+        <div class="poll-control">
+            <div class="qr-section">
+                <h3>User QR Code</h3>
+                <button id="generate-qr" class="btn btn-primary">Generate QR Code</button>
+                <div id="qr-display" style="display: none;">
+                    <img id="qr-image" alt="QR Code">
+                    <p id="qr-url"></p>
+                </div>
+            </div>
+
+            <div class="poll-actions">
+                <button id="create-poll" class="btn btn-success">Create New Poll</button>
+                <button id="start-poll" class="btn btn-primary" disabled>Start Poll</button>
+                <button id="next-group" class="btn btn-warning" disabled>Next Group</button>
+                <button id="end-poll" class="btn btn-danger" disabled>End Poll</button>
+            </div>
+
+            <div id="poll-status" class="poll-status">
+                <h3>Current Poll Status</h3>
+                <div id="status-info">No active poll</div>
+            </div>
+
+            <div id="current-group-info" class="current-group">
+                <h3>Current Group</h3>
+                <div id="group-images"></div>
+                <div id="group-submissions">Submissions: 0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESULTS TAB -->
+    <div class="tab-content" id="results-tab">
+        <h2>Poll Results</h2>
+
+        <div class="results-toggle">
+            <button class="result-btn active" data-result="current">Current Group</button>
+            <button class="result-btn" data-result="cumulative">Cumulative Results</button>
+        </div>
+
+        <div id="current-results" class="results-section active">
+            <h3>Current Group Results</h3>
+            <div id="current-results-display"></div>
+        </div>
+
+        <div id="cumulative-results" class="results-section">
+            <h3>Cumulative Results (All Groups)</h3>
+            <div id="cumulative-results-display"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}

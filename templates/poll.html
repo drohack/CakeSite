@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Join Poll - FMK Quiz{% endblock %}
+
+{% block content %}
+<div class="poll-page">
+    <header class="poll-header">
+        <h1>Marry, F, Kill</h1>
+        <a href="/" class="btn btn-secondary btn-sm">Home</a>
+    </header>
+
+    <div id="poll-status-message" class="status-message"></div>
+
+    <div id="poll-waiting" class="waiting-screen">
+        <div class="spinner"></div>
+        <p>Waiting for poll to start...</p>
+    </div>
+
+    <div id="poll-active" class="poll-active" style="display: none;">
+        <div class="instructions">
+            <p>Drag each image into the appropriate category:</p>
+        </div>
+
+        <div class="drop-zones">
+            <div class="drop-zone" data-category="marry">
+                <h3>💍 Marry</h3>
+                <div class="drop-area" data-category="marry">
+                    <span class="drop-placeholder">Drop here</span>
+                </div>
+            </div>
+
+            <div class="drop-zone" data-category="f">
+                <h3>🔥 F</h3>
+                <div class="drop-area" data-category="f">
+                    <span class="drop-placeholder">Drop here</span>
+                </div>
+            </div>
+
+            <div class="drop-zone" data-category="kill">
+                <h3>💀 Kill</h3>
+                <div class="drop-area" data-category="kill">
+                    <span class="drop-placeholder">Drop here</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="images-pool" class="images-pool">
+            <!-- Images will be loaded here -->
+        </div>
+
+        <button id="submit-btn" class="btn btn-primary btn-large" disabled>Submit</button>
+    </div>
+
+    <div id="poll-results" class="poll-results" style="display: none;">
+        <h2>Results</h2>
+        <div id="results-display"></div>
+        <div class="waiting-next">
+            <p>Waiting for next group...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/poll.js') }}"></script>
+{% endblock %}
