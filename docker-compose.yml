@@ -5,7 +5,7 @@ services:
     build: .
     container_name: fmk-quiz
     ports:
-      - "5000:5000"
+      - "8765:5000"
     volumes:
       # Mount images directory for easy image management
       - ./images:/app/images
