@@ -262,6 +262,13 @@ def get_current_poll():
     })
 
 
+@app.route('/admin/polls/all', methods=['GET'])
+def get_all_polls():
+    """Get all polls ordered by most recent."""
+    polls = Poll.query.order_by(Poll.created_at.desc()).all()
+    return jsonify([poll.to_dict() for poll in polls])
+
+
 @app.route('/admin/poll/<int:poll_id>/start', methods=['POST'])
 def start_poll(poll_id):
     """Start a poll and activate the first group."""
@@ -673,6 +680,13 @@ def next_smashpass_image(session_id):
     }, room='smashpass')
 
     return jsonify(session_obj.to_dict())
+
+
+@app.route('/smashpass/sessions/all', methods=['GET'])
+def get_all_smashpass_sessions():
+    """Get all Smash or Pass sessions ordered by most recent."""
+    sessions = SmashPassSession.query.order_by(SmashPassSession.created_at.desc()).all()
+    return jsonify([session.to_dict() for session in sessions])
 
 
 @app.route('/smashpass/session/<int:session_id>/results', methods=['GET'])

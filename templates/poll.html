@@ -5,11 +5,8 @@
 {% block content %}
 <div class="poll-page">
     <header class="poll-header">
-        <h1>Marry, F, Kill</h1>
-        <a href="/" class="btn btn-secondary btn-sm">Home</a>
+        <h1>Marry, Fuck, Kill Quiz</h1>
     </header>
-
-    <div id="poll-status-message" class="status-message"></div>
 
     <div id="poll-waiting" class="waiting-screen">
         <div class="spinner"></div>
@@ -18,47 +15,286 @@
 
     <div id="poll-active" class="poll-active" style="display: none;">
         <div class="instructions">
-            <p>Drag each image into the appropriate category:</p>
+            <p>Tap an image, then select category:</p>
         </div>
 
-        <div class="drop-zones">
-            <div class="drop-zone" data-category="marry">
-                <h3>💍 Marry</h3>
-                <div class="drop-area" data-category="marry">
-                    <span class="drop-placeholder">Drop here</span>
-                </div>
-            </div>
-
-            <div class="drop-zone" data-category="f">
-                <h3>🔥 F</h3>
-                <div class="drop-area" data-category="f">
-                    <span class="drop-placeholder">Drop here</span>
-                </div>
-            </div>
-
-            <div class="drop-zone" data-category="kill">
-                <h3>💀 Kill</h3>
-                <div class="drop-area" data-category="kill">
-                    <span class="drop-placeholder">Drop here</span>
-                </div>
-            </div>
+        <div id="images-selection" class="images-selection">
+            <!-- Images will be loaded here as selectable cards -->
         </div>
 
-        <div id="images-pool" class="images-pool">
-            <!-- Images will be loaded here -->
+        <div class="categories-buttons">
+            <button id="marry-btn" class="category-btn" data-category="marry" disabled>
+                💍 Marry
+            </button>
+            <button id="f-btn" class="category-btn" data-category="f" disabled>
+                🔥 F
+            </button>
+            <button id="kill-btn" class="category-btn" data-category="kill" disabled>
+                💀 Kill
+            </button>
         </div>
 
         <button id="submit-btn" class="btn btn-primary btn-large" disabled>Submit</button>
     </div>
 
-    <div id="poll-results" class="poll-results" style="display: none;">
-        <h2>Results</h2>
-        <div id="results-display"></div>
-        <div class="waiting-next">
-            <p>Waiting for next group...</p>
-        </div>
+    <div id="poll-waiting-next" class="waiting-screen" style="display: none;">
+        <div class="spinner"></div>
+        <p>Submitted! Waiting for next group...</p>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Override container from base template */
+    html, body {
+        background: #000 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        height: 100%;
+    }
+
+    .container {
+        max-width: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        min-height: 100vh;
+    }
+
+    .poll-page {
+        background: #000;
+        color: #fff;
+        padding: 0;
+        min-height: 100vh;
+        width: 100%;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .poll-header {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 15px 20px;
+        background: rgba(0, 0, 0, 0.9);
+        border-bottom: 1px solid #333;
+        flex-shrink: 0;
+    }
+
+    .poll-header h1 {
+        margin: 0;
+        font-size: 1.75rem;
+        color: #fff;
+    }
+
+    .status-message {
+        padding: 15px;
+        margin: 15px 20px;
+        border-radius: 8px;
+        text-align: center;
+        font-weight: 600;
+    }
+
+    .status-message.info {
+        background: rgba(52, 152, 219, 0.2);
+        color: #3498db;
+        border: 1px solid #3498db;
+    }
+
+    .status-message.success {
+        background: rgba(46, 204, 113, 0.2);
+        color: #2ecc71;
+        border: 1px solid #2ecc71;
+    }
+
+    .status-message.error {
+        background: rgba(231, 76, 60, 0.2);
+        color: #e74c3c;
+        border: 1px solid #e74c3c;
+    }
+
+    .waiting-screen {
+        text-align: center;
+        padding: 60px 20px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .waiting-screen p {
+        color: #ccc;
+        font-size: 1.25rem;
+    }
+
+    .poll-active {
+        animation: fadeIn 0.5s ease;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 15px;
+        overflow: hidden;
+    }
+
+    .instructions {
+        text-align: center;
+        margin: 0 0 10px 0;
+        font-size: 1rem;
+        color: #ccc;
+        flex-shrink: 0;
+    }
+
+    .images-selection {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-bottom: 15px;
+        flex-shrink: 0;
+        justify-items: center;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .images-selection .image-card:first-child {
+        grid-column: 1 / -1;
+    }
+
+    .image-card {
+        cursor: pointer;
+        border: 3px solid transparent;
+        border-radius: 8px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        position: relative;
+        background: rgba(255, 255, 255, 0.05);
+        width: 100%;
+        max-width: 280px;
+    }
+
+    .image-card img {
+        width: 100%;
+        height: 220px;
+        object-fit: cover;
+        display: block;
+    }
+
+    .image-card.selected {
+        border-color: #3498db;
+        box-shadow: 0 0 20px rgba(52, 152, 219, 0.8);
+        transform: scale(1.05);
+    }
+
+    .image-card .category-badge {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+
+    .categories-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 15px;
+        flex-shrink: 0;
+    }
+
+    .category-btn {
+        padding: 15px;
+        border: 2px solid transparent;
+        border-radius: 8px;
+        font-size: 1.125rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        color: white;
+        position: relative;
+    }
+
+    .category-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .category-btn[data-category="marry"] {
+        background: linear-gradient(135deg, #2ecc71, #27ae60);
+    }
+
+    .category-btn[data-category="f"] {
+        background: linear-gradient(135deg, #e74c3c, #c0392b);
+    }
+
+    .category-btn[data-category="kill"] {
+        background: linear-gradient(135deg, #34495e, #2c3e50);
+    }
+
+    .category-btn.assigned {
+        opacity: 0.5;
+        background: linear-gradient(135deg, #666, #555);
+    }
+
+    .category-btn.assigned::after {
+        content: '✓';
+        position: absolute;
+        right: 15px;
+        font-size: 1.5rem;
+    }
+
+    #submit-btn {
+        width: 100%;
+        padding: 15px;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+    @media (max-width: 768px) {
+        .poll-active {
+            padding: 10px;
+        }
+
+        .instructions {
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+
+        .images-selection {
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .image-card {
+            max-width: 240px;
+        }
+
+        .image-card img {
+            height: 160px;
+        }
+
+        .categories-buttons {
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .category-btn {
+            padding: 12px;
+            font-size: 1rem;
+        }
+
+        #submit-btn {
+            padding: 12px;
+            font-size: 1rem;
+        }
+    }
+</style>
 {% endblock %}
 
 {% block extra_js %}

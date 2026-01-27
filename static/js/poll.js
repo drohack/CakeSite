@@ -9,9 +9,15 @@ let assignments = {
     f: null,
     kill: null
 };
+let selectedImageId = null;
+let imageElements = {};
 
 // Initialize poll page
 document.addEventListener('DOMContentLoaded', () => {
+
+    // Add debug indicator
+    document.querySelector('.waiting-screen p').textContent = 'Loading poll...';
+
     // Initialize socket
     initializeSocket();
 
@@ -21,11 +27,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load current poll
     loadCurrentPoll();
 
-    // Setup drag and drop
-    setupDragAndDrop();
-
     // Setup submit button
     document.getElementById('submit-btn').addEventListener('click', submitPoll);
+
+    // Setup category buttons
+    setupCategoryButtons();
 });
 
 // Load current poll
@@ -43,6 +49,7 @@ async function loadCurrentPoll() {
             showPollInterface(result.group);
         }
     } catch (error) {
+        console.error('Failed to load poll:', error);
         showWaitingScreen('No active poll. Waiting for admin to start...');
     }
 }
@@ -57,37 +64,47 @@ function showWaitingScreen(message = 'Waiting for poll to start...') {
 
 // Show poll interface
 function showPollInterface(groupData) {
+
     document.getElementById('poll-waiting').style.display = 'none';
-    document.getElementById('poll-active').style.display = 'block';
-    document.getElementById('poll-results').style.display = 'none';
+    document.getElementById('poll-waiting-next').style.display = 'none';
+    document.getElementById('poll-active').style.display = 'flex';
 
     // Reset assignments
     assignments = { marry: null, f: null, kill: null };
+    selectedImageId = null;
+    imageElements = {};
 
-    // Load images
-    const pool = document.getElementById('images-pool');
-    pool.innerHTML = '';
+    // Load images as selectable cards
+    const container = document.getElementById('images-selection');
+    container.innerHTML = '';
 
     groupData.images.forEach(image => {
-        const img = document.createElement('img');
-        img.src = `/images/${image.filename}`;
-        img.className = 'draggable-image';
-        img.draggable = true;
-        img.dataset.imageId = image.id;
-        img.dataset.filename = image.filename;
-        pool.appendChild(img);
+        const card = document.createElement('div');
+        card.className = 'image-card';
+        card.dataset.imageId = image.id;
+        card.innerHTML = `
+            <img src="/images/${image.filename}" alt="${image.filename}">
+            <div class="category-badge" style="display: none;"></div>
+        `;
+
+        // Click to select image
+        card.addEventListener('click', () => selectImage(image.id));
+
+        imageElements[image.id] = card;
+        container.appendChild(card);
     });
 
-    // Clear drop zones
-    document.querySelectorAll('.drop-area').forEach(area => {
-        area.innerHTML = '<span class="drop-placeholder">Drop here</span>';
+    // Reset category buttons
+    document.querySelectorAll('.category-btn').forEach(btn => {
+        btn.classList.remove('assigned');
+        btn.disabled = true;
     });
 
     updateSubmitButton();
 }
 
-// Setup drag and drop
-function setupDragAndDrop() {
+// Setup drag and drop (DEPRECATED - using tap selection now)
+function setupDragAndDrop_OLD() {
     let draggedElement = null;
 
     document.addEventListener('dragstart', (e) => {
@@ -184,6 +201,124 @@ function setupDragAndDrop() {
     });
 }
 
+// Select an image
+function selectImage(imageId) {
+    selectedImageId = imageId;
+
+    // Update visual selection
+    Object.values(imageElements).forEach(card => {
+        card.classList.remove('selected');
+    });
+    if (imageElements[imageId]) {
+        imageElements[imageId].classList.add('selected');
+    }
+
+    // Enable all category buttons when an image is selected
+    document.querySelectorAll('.category-btn').forEach(btn => {
+        btn.disabled = false;
+    });
+}
+
+// Setup category buttons
+function setupCategoryButtons() {
+    document.querySelectorAll('.category-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const category = btn.dataset.category;
+
+            if (!selectedImageId) {
+                showNotification('Please select an image first', 'error');
+                return;
+            }
+
+            // If clicking a category that's assigned, check if it's the same image
+            if (btn.classList.contains('assigned') && assignments[category] === selectedImageId) {
+                // Same image clicking its own category - unassign it
+                unassignCategory(category);
+                return;
+            }
+
+            // Otherwise, assign (will swap if category is already assigned to different image)
+            assignImageToCategory(selectedImageId, category);
+        });
+    });
+}
+
+// Unassign a category
+function unassignCategory(category) {
+
+    const imageId = assignments[category];
+    if (!imageId) return;
+
+    // Remove assignment
+    assignments[category] = null;
+
+    // Update button visual
+    const btn = document.querySelector(`[data-category="${category}"]`);
+    btn.classList.remove('assigned');
+
+    // Remove badge from image
+    const card = imageElements[imageId];
+    if (card) {
+        const badge = card.querySelector('.category-badge');
+        badge.style.display = 'none';
+    }
+
+    updateSubmitButton();
+}
+
+// Assign image to category
+function assignImageToCategory(imageId, category) {
+
+    // Check if this image is already assigned to another category
+    for (let cat in assignments) {
+        if (assignments[cat] === imageId && cat !== category) {
+            // Remove from previous category
+            assignments[cat] = null;
+            const prevBtn = document.querySelector(`[data-category="${cat}"]`);
+            if (prevBtn) prevBtn.classList.remove('assigned');
+        }
+    }
+
+    // Check if another image is already in this category
+    if (assignments[category] && assignments[category] !== imageId) {
+        // Clear badge from previous image
+        const prevCard = imageElements[assignments[category]];
+        if (prevCard) {
+            const badge = prevCard.querySelector('.category-badge');
+            badge.style.display = 'none';
+        }
+    }
+
+    // Assign new
+    assignments[category] = imageId;
+
+    // Update button visual
+    const btn = document.querySelector(`[data-category="${category}"]`);
+    btn.classList.add('assigned');
+
+    // Update image badge
+    const card = imageElements[imageId];
+    if (card) {
+        const badge = card.querySelector('.category-badge');
+        const categoryLabels = {
+            marry: '💍',
+            f: '🔥',
+            kill: '💀'
+        };
+        badge.textContent = categoryLabels[category];
+        badge.style.display = 'block';
+    }
+
+    // Deselect image
+    selectedImageId = null;
+    Object.values(imageElements).forEach(c => c.classList.remove('selected'));
+
+    // Disable category buttons until next selection
+    document.querySelectorAll('.category-btn').forEach(b => b.disabled = true);
+
+    updateSubmitButton();
+}
+
 // Update submit button state
 function updateSubmitButton() {
     const submitBtn = document.getElementById('submit-btn');
@@ -209,7 +344,10 @@ async function submitPoll() {
     try {
         const result = await apiCall('/poll/submit', 'POST', submitData);
         showNotification('Submitted successfully!', 'success');
-        displayResults(result.results);
+
+        // Show waiting screen instead of results
+        document.getElementById('poll-active').style.display = 'none';
+        document.getElementById('poll-waiting-next').style.display = 'flex';
     } catch (error) {
         showNotification('Failed to submit: ' + error.message, 'error');
     }
@@ -288,27 +426,20 @@ function setupSocketListeners() {
     });
 
     socket.on('group_changed', (data) => {
-        showNotification('New group available!', 'info');
-        setTimeout(() => loadCurrentPoll(), 500);
+        showNotification('Next group!', 'info');
+        loadCurrentPoll();
     });
 
     socket.on('poll_ended', (data) => {
         showNotification('Poll ended. Thank you for participating!', 'info');
+        document.getElementById('poll-waiting-next').style.display = 'none';
         showWaitingScreen('Poll has ended. Thank you for participating!');
-    });
-
-    socket.on('results_updated', (data) => {
-        // If we're viewing results, update them
-        const resultsSection = document.getElementById('poll-results');
-        if (resultsSection.style.display === 'block' && data.group_id === currentGroupId) {
-            displayResults(data);
-        }
     });
 }
 
 // Add CSS for total submissions display
-const style = document.createElement('style');
-style.textContent = `
+const pollStyle = document.createElement('style');
+pollStyle.textContent = `
     .total-submissions {
         font-size: 1.25rem;
         margin-bottom: 20px;
@@ -319,4 +450,4 @@ style.textContent = `
         text-align: center;
     }
 `;
-document.head.appendChild(style);
+document.head.appendChild(pollStyle);

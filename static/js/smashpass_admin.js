@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize socket
     initializeSocket();
 
+    // Setup tabs
+    setupTabs();
+
     // Setup button handlers
     setupButtonHandlers();
 
@@ -28,13 +31,115 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check for existing session
     checkCurrentSession();
 
-    // Auto-refresh results every 2 seconds when viewing current image
+    // Auto-refresh only active session live results
     setInterval(() => {
         if (currentSessionId && currentImage) {
             loadCurrentImage();
         }
     }, 2000);
 });
+
+// Tab switching
+function setupTabs() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const tabName = button.dataset.tab;
+
+            // Remove active class from all tabs
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            tabContents.forEach(content => content.classList.remove('active'));
+
+            // Add active class to clicked tab
+            button.classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+
+            // Load sessions if switching to results tab
+            if (tabName === 'results') {
+                loadSessionsDropdown();
+            }
+        });
+    });
+
+    // Setup session dropdown
+    const sessionSelect = document.getElementById('sp-session-select');
+    if (sessionSelect) {
+        sessionSelect.addEventListener('change', (e) => {
+            const selectedSessionId = parseInt(e.target.value);
+            if (selectedSessionId) {
+                loadSessionResults(selectedSessionId);
+            }
+        });
+    }
+}
+
+// Load all sessions into dropdown
+async function loadSessionsDropdown() {
+    try {
+        const sessions = await apiCall('/smashpass/sessions/all');
+        const select = document.getElementById('sp-session-select');
+        select.innerHTML = '';
+
+        if (sessions.length === 0) {
+            select.innerHTML = '<option value="">No sessions found</option>';
+            return;
+        }
+
+        sessions.forEach((session, index) => {
+            const option = document.createElement('option');
+            option.value = session.id;
+            const status = session.status.charAt(0).toUpperCase() + session.status.slice(1);
+            const date = session.started_at ? new Date(session.started_at).toLocaleString() : 'Not started';
+            option.textContent = `Session #${session.id} - ${status} - ${date}`;
+
+            if (index === 0) option.selected = true;
+            select.appendChild(option);
+        });
+
+        // Auto-load the first (most recent) session
+        if (sessions.length > 0) {
+            loadSessionResults(sessions[0].id);
+        }
+    } catch (error) {
+        console.error('Failed to load sessions:', error);
+        document.getElementById('sp-session-select').innerHTML = '<option value="">Error loading sessions</option>';
+    }
+}
+
+// Load results for a specific session
+async function loadSessionResults(sessionId) {
+    try {
+        const results = await apiCall(`/smashpass/session/${sessionId}/results`);
+
+        const smashList = document.getElementById('smashes-results-list');
+        const passList = document.getElementById('passes-results-list');
+
+        smashList.innerHTML = '';
+        passList.innerHTML = '';
+
+        if (results.smashes.length === 0) {
+            smashList.innerHTML = '<div class="no-results">No smashes</div>';
+        } else {
+            results.smashes.forEach(img => {
+                const card = createResultCard(img);
+                smashList.appendChild(card);
+            });
+        }
+
+        if (results.passes.length === 0) {
+            passList.innerHTML = '<div class="no-results">No passes</div>';
+        } else {
+            results.passes.forEach(img => {
+                const card = createResultCard(img);
+                passList.appendChild(card);
+            });
+        }
+    } catch (error) {
+        console.error('Failed to load session results:', error);
+    }
+}
 
 // Load QR code on page load
 async function loadQRCode() {
@@ -222,11 +327,9 @@ async function loadFinalResults() {
         return;
     }
 
-    console.log('Loading final results for session', currentSessionId);
 
     try {
         const results = await apiCall(`/smashpass/session/${currentSessionId}/results`);
-        console.log('Results loaded:', results);
 
         // Display smashes
         const smashList = document.getElementById('smashes-list');

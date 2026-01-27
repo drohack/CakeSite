@@ -9,23 +9,29 @@
             <a href="/" class="btn btn-secondary btn-sm">Home</a>
             <h1>Smash or Pass</h1>
         </div>
+        <div class="header-center">
+            <button class="tab-btn active" data-tab="quiz">Quiz</button>
+            <button class="tab-btn" data-tab="results">Results</button>
+        </div>
         <div class="header-right">
             <button id="create-session" class="btn btn-success">Create Session</button>
             <button id="next-image" class="btn btn-primary" disabled>Next →</button>
         </div>
     </header>
 
-    <div id="sp-status" class="sp-status">
-        <div id="status-info">No active session</div>
-    </div>
+    <!-- QUIZ TAB -->
+    <div class="tab-content active" id="quiz-tab">
+        <div id="sp-status" class="sp-status">
+            <div id="status-info">No active session</div>
+        </div>
 
-    <div id="sp-initial-qr" class="sp-initial-qr">
-        <h2>Scan to Join</h2>
-        <img id="sp-qr-image-main" alt="QR Code">
-        <p id="sp-qr-url-main"></p>
-    </div>
+        <div id="sp-initial-qr" class="sp-initial-qr">
+            <h2>Scan to Join</h2>
+            <img id="sp-qr-image-main" alt="QR Code">
+            <p id="sp-qr-url-main"></p>
+        </div>
 
-    <div id="sp-main-content" class="sp-main-content" style="display: none;">
+        <div id="sp-main-content" class="sp-main-content" style="display: none;">
         <div class="sp-image-section">
             <h2 id="current-name"></h2>
             <div class="image-container">
@@ -65,23 +71,53 @@
         </div>
     </div>
 
-    <div id="sp-progress" class="sp-progress">
-        <span id="progress-counter">0 / 0</span>
+        <div id="sp-progress" class="sp-progress">
+            <span id="progress-counter">0 / 0</span>
+        </div>
+
+        <div id="sp-results-page" class="sp-results-page" style="display: none;">
+            <h2>Final Results</h2>
+            <div class="results-grid">
+                <div class="results-section smashes-section">
+                    <h3>🔥 Smashes</h3>
+                    <div id="smashes-list" class="results-list"></div>
+                </div>
+
+                <div class="results-divider"></div>
+
+                <div class="results-section passes-section">
+                    <h3>👎 Passes</h3>
+                    <div id="passes-list" class="results-list"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div id="sp-results-page" class="sp-results-page" style="display: none;">
-        <h2>Final Results</h2>
-        <div class="results-grid">
-            <div class="results-section smashes-section">
-                <h3>🔥 Smashes</h3>
-                <div id="smashes-list" class="results-list"></div>
+    <!-- RESULTS TAB -->
+    <div class="tab-content" id="results-tab">
+        <div class="results-tab-header">
+            <h2>Smash or Pass Results</h2>
+            <div class="poll-selector">
+                <label for="sp-session-select">Select Session:</label>
+                <select id="sp-session-select" class="poll-dropdown">
+                    <option value="">Loading...</option>
+                </select>
             </div>
+        </div>
 
-            <div class="results-divider"></div>
+        <div class="sp-results-display-container">
+            <div class="sp-results-columns">
+                <div class="sp-results-column">
+                    <h3>🔥 Smashes</h3>
+                    <div id="smashes-results-list" class="sp-results-list"></div>
+                </div>
 
-            <div class="results-section passes-section">
-                <h3>👎 Passes</h3>
-                <div id="passes-list" class="results-list"></div>
+                <div class="results-divider"></div>
+
+                <div class="sp-results-column">
+                    <h3>👎 Passes</h3>
+                    <div id="passes-results-list" class="sp-results-list"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -144,10 +180,52 @@
         color: #fff;
     }
 
+    .header-center {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+    }
+
     .header-right {
         display: flex;
         gap: 10px;
         align-items: center;
+        justify-content: flex-end;
+    }
+
+    .tab-btn {
+        padding: 10px 20px;
+        border: none;
+        background: rgba(255, 255, 255, 0.1);
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        color: #ccc;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+    }
+
+    .tab-btn:hover {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.15);
+    }
+
+    .tab-btn.active {
+        color: #fff;
+        background: #3498db;
+    }
+
+    .tab-content {
+        display: none;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    .tab-content.active {
+        display: flex;
+        flex-direction: column;
     }
 
     .sp-status {
@@ -470,6 +548,46 @@
     .result-card .votes {
         font-size: 0.875rem;
         color: #ccc;
+    }
+
+    /* Smash or Pass Results Tab */
+    .sp-results-display-container {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .sp-results-columns {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 1fr 2px 1fr;
+        gap: 40px;
+        padding: 20px;
+        overflow-y: auto;
+    }
+
+    .sp-results-column h3 {
+        text-align: center;
+        font-size: 2rem;
+        margin-bottom: 30px;
+        color: #fff;
+    }
+
+    .sp-results-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 20px;
+    }
+
+    @media (max-width: 1200px) {
+        .sp-results-columns {
+            grid-template-columns: 1fr;
+        }
+
+        .sp-results-columns .results-divider {
+            display: none;
+        }
     }
 
     @media (max-width: 1200px) {
