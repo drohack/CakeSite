@@ -201,6 +201,23 @@ function setupButtonHandlers() {
             showNotificationCenter('Failed to move to next image: ' + error.message, 'error');
         }
     });
+
+    // End Session
+    document.getElementById('end-session').addEventListener('click', async () => {
+        if (!currentSessionId) return;
+        if (!confirm('Are you sure you want to end this session?')) return;
+
+        try {
+            const result = await apiCall(`/smashpass/session/${currentSessionId}/end`, 'POST');
+            currentSession = result;
+            showNotificationCenter('Session ended', 'success');
+            document.getElementById('sp-main-content').style.display = 'none';
+            updateSessionStatus();
+            updateButtonStates();
+        } catch (error) {
+            showNotificationCenter('Failed to end session: ' + error.message, 'error');
+        }
+    });
 }
 
 // Check for existing session
@@ -247,10 +264,12 @@ function updateSessionStatus() {
 function updateButtonStates() {
     const createBtn = document.getElementById('create-session');
     const nextBtn = document.getElementById('next-image');
+    const endBtn = document.getElementById('end-session');
 
     if (!currentSession) {
         createBtn.disabled = false;
         nextBtn.disabled = true;
+        endBtn.disabled = true;
         return;
     }
 
@@ -258,14 +277,17 @@ function updateButtonStates() {
         case 'active':
             createBtn.disabled = true;
             nextBtn.disabled = false;
+            endBtn.disabled = false;
             break;
         case 'completed':
             createBtn.disabled = false;
             nextBtn.disabled = true;
+            endBtn.disabled = true;
             break;
         default:
             createBtn.disabled = true;
             nextBtn.disabled = true;
+            endBtn.disabled = true;
     }
 }
 

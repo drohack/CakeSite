@@ -160,15 +160,75 @@ def get_cumulative_results(poll_id):
 
 @app.route('/')
 def index():
-    """Smash or Pass user voting page."""
+    """Unified voting page - shows either S/P or MFK depending on what's active."""
     user_id = get_or_create_user_id()
-    return render_template('smashpass_poll.html')
+    return render_template('vote.html')
 
 
 @app.route('/admin')
 def admin_home():
     """Admin home page."""
     return render_template('index.html')
+
+
+@app.route('/vote/current', methods=['GET'])
+def get_current_vote():
+    """Get the currently active vote (either S/P or MFK)."""
+    user_id = get_or_create_user_id()
+
+    # Check for active Smash or Pass session
+    sp_session = SmashPassSession.query.filter_by(status='active').order_by(
+        SmashPassSession.created_at.desc()
+    ).first()
+
+    if sp_session:
+        image_order = json.loads(sp_session.image_order)
+        if sp_session.current_image_index < len(image_order):
+            current_image_id = image_order[sp_session.current_image_index]
+            current_image = Image.query.get(current_image_id)
+
+            if current_image:
+                existing_vote = SmashPassVote.query.filter_by(
+                    session_id=sp_session.id,
+                    image_id=current_image_id,
+                    user_id=user_id
+                ).first()
+
+                return jsonify({
+                    'type': 'smashpass',
+                    'session_id': sp_session.id,
+                    'image': {
+                        'id': current_image.id,
+                        'filename': current_image.filename,
+                        'name': os.path.splitext(current_image.filename)[0]
+                    },
+                    'has_voted': existing_vote is not None,
+                    'vote': existing_vote.vote if existing_vote else None
+                })
+
+    # Check for active MFK poll
+    poll = Poll.query.filter_by(status='active').order_by(Poll.created_at.desc()).first()
+
+    if poll:
+        current_group = PollGroup.query.filter_by(
+            poll_id=poll.id,
+            group_number=poll.current_group
+        ).first()
+
+        if current_group:
+            existing_submission = Submission.query.filter_by(
+                group_id=current_group.id,
+                user_id=user_id
+            ).first()
+
+            return jsonify({
+                'type': 'mfk',
+                'poll_id': poll.id,
+                'group': current_group.to_dict(),
+                'has_submitted': existing_submission is not None
+            })
+
+    return jsonify({'type': 'none', 'message': 'No active voting'}), 404
 
 
 @app.route('/mfk/admin')
@@ -285,13 +345,23 @@ def start_poll(poll_id):
     if poll.status != 'setup':
         return jsonify({'error': 'Poll already started or ended'}), 400
 
+    # Auto-end any active Smash or Pass sessions
+    active_sessions = SmashPassSession.query.filter_by(status='active').all()
+    for session in active_sessions:
+        session.status = 'completed'
+        session.ended_at = datetime.utcnow()
+    if active_sessions:
+        db.session.commit()
+        socketio.emit('smashpass_completed', {}, room='smashpass')
+
     poll.status = 'active'
     poll.started_at = datetime.utcnow()
     poll.current_group = 0
     db.session.commit()
 
-    # Notify all connected clients
+    # Notify all connected clients (including unified vote page)
     socketio.emit('poll_started', {'poll_id': poll.id}, room='poll')
+    socketio.emit('vote_changed', {'type': 'mfk'})
 
     return jsonify(poll.to_dict())
 
@@ -531,6 +601,15 @@ def smashpass_admin():
 @app.route('/smashpass/session/create', methods=['POST'])
 def create_smashpass_session():
     """Create a new Smash or Pass session with randomized images."""
+    # Auto-end any active MFK polls
+    active_polls = Poll.query.filter_by(status='active').all()
+    for poll in active_polls:
+        poll.status = 'ended'
+        poll.ended_at = datetime.utcnow()
+    if active_polls:
+        db.session.commit()
+        socketio.emit('poll_ended', {}, room='poll')
+
     # Get all images
     all_images = Image.query.all()
 
@@ -551,8 +630,9 @@ def create_smashpass_session():
     db.session.add(session_obj)
     db.session.commit()
 
-    # Notify all connected clients
+    # Notify all connected clients (including unified vote page)
     socketio.emit('smashpass_started', {'session_id': session_obj.id}, room='smashpass')
+    socketio.emit('vote_changed', {'type': 'smashpass'})
 
     return jsonify({
         'session': session_obj.to_dict(),
@@ -686,6 +766,24 @@ def next_smashpass_image(session_id):
         'session_id': session_obj.id,
         'image_index': session_obj.current_image_index
     }, room='smashpass')
+
+    return jsonify(session_obj.to_dict())
+
+
+@app.route('/smashpass/session/<int:session_id>/end', methods=['POST'])
+def end_smashpass_session(session_id):
+    """End the current Smash or Pass session."""
+    session_obj = SmashPassSession.query.get_or_404(session_id)
+
+    if session_obj.status != 'active':
+        return jsonify({'error': 'Session is not active'}), 400
+
+    session_obj.status = 'completed'
+    session_obj.ended_at = datetime.utcnow()
+    db.session.commit()
+
+    # Notify all connected clients
+    socketio.emit('smashpass_completed', {'session_id': session_obj.id}, room='smashpass')
 
     return jsonify(session_obj.to_dict())
 
