@@ -160,8 +160,21 @@ def get_cumulative_results(poll_id):
 
 @app.route('/')
 def index():
-    """Redirect to the user poll page."""
+    """Smash or Pass user voting page."""
+    user_id = get_or_create_user_id()
+    return render_template('smashpass_poll.html')
+
+
+@app.route('/admin')
+def admin_home():
+    """Admin home page."""
     return render_template('index.html')
+
+
+@app.route('/mfk/admin')
+def mfk_admin():
+    """MFK Admin dashboard page."""
+    return render_template('admin.html')
 
 
 @app.route('/images/<filename>')
@@ -171,13 +184,8 @@ def serve_image(filename):
 
 
 # ============================================================================
-# ROUTES - ADMIN
+# ROUTES - ADMIN API
 # ============================================================================
-
-@app.route('/admin')
-def admin():
-    """Admin dashboard page."""
-    return render_template('admin.html')
 
 
 @app.route('/admin/images', methods=['GET'])
@@ -742,10 +750,10 @@ def get_smashpass_results(session_id):
 # ============================================================================
 
 @app.route('/smashpass')
-def smashpass_user():
-    """User-facing Smash or Pass voting page."""
-    user_id = get_or_create_user_id()
-    return render_template('smashpass_poll.html')
+def smashpass_user_redirect():
+    """Redirect to root (backwards compatibility)."""
+    from flask import redirect
+    return redirect('/')
 
 
 @app.route('/smashpass/current', methods=['GET'])
@@ -867,7 +875,7 @@ def submit_smashpass_vote():
 def generate_smashpass_qr():
     """Generate QR code for users to join Smash or Pass."""
     base_url = request.host_url.rstrip('/')
-    smashpass_url = f"{base_url}/smashpass"
+    smashpass_url = f"{base_url}/"
 
     qr_code = generate_qr_code(smashpass_url)
     return jsonify({'qr_code': qr_code, 'url': smashpass_url})
