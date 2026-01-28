@@ -7,12 +7,15 @@ import uuid
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_from_directory, session
 from flask_socketio import SocketIO, emit, join_room
+from flask_httpauth import HTTPBasicAuth
+from werkzeug.utils import secure_filename
 import qrcode
 from io import BytesIO
 import base64
 from database import db, init_db, Image, Poll, PollGroup, Submission, SmashPassSession, SmashPassVote
 from sqlalchemy import func
 import json
+from PIL import Image as PILImage
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -30,6 +33,25 @@ init_db(app)
 
 # Initialize SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+
+# Initialize HTTP Basic Auth
+auth = HTTPBasicAuth()
+
+# Get admin password from environment variable
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')  # Default password for development
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+
+@auth.verify_password
+def verify_password(username, password):
+    """Verify admin password."""
+    return username == 'admin' and password == ADMIN_PASSWORD
+
+
+def allowed_file(filename):
+    """Check if file extension is allowed."""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 # ============================================================================
@@ -166,9 +188,17 @@ def index():
 
 
 @app.route('/admin')
+@auth.login_required
 def admin_home():
     """Admin home page."""
     return render_template('index.html')
+
+
+@app.route('/admin/images/manage')
+@auth.login_required
+def image_manager():
+    """Image upload/rename/delete manager page."""
+    return render_template('image_manager.html')
 
 
 @app.route('/vote/current', methods=['GET'])
@@ -231,7 +261,8 @@ def get_current_vote():
     return jsonify({'type': 'none', 'message': 'No active voting'}), 404
 
 
-@app.route('/mfk/admin')
+@app.route('/admin/mfk')
+@auth.login_required
 def mfk_admin():
     """MFK Admin dashboard page."""
     return render_template('admin.html')
@@ -244,11 +275,12 @@ def serve_image(filename):
 
 
 # ============================================================================
-# ROUTES - ADMIN API
+# ROUTES - ADMIN API (All require authentication)
 # ============================================================================
 
 
 @app.route('/admin/images', methods=['GET'])
+@auth.login_required
 def get_images():
     """Get all images with their active status."""
     images = Image.query.all()
@@ -256,6 +288,7 @@ def get_images():
 
 
 @app.route('/admin/images/<int:image_id>/toggle', methods=['POST'])
+@auth.login_required
 def toggle_image(image_id):
     """Toggle the active status of an image."""
     image = Image.query.get_or_404(image_id)
@@ -264,7 +297,151 @@ def toggle_image(image_id):
     return jsonify(image.to_dict())
 
 
+@app.route('/admin/images/upload', methods=['POST'])
+@auth.login_required
+def upload_image():
+    """Upload a new image."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type. Allowed: PNG, JPG, JPEG, GIF, WEBP'}), 400
+
+    # Validate file size
+    file.seek(0, 2)  # Seek to end
+    file_size = file.tell()
+    file.seek(0)  # Reset to beginning
+
+    if file_size > MAX_FILE_SIZE:
+        return jsonify({'error': f'File too large. Max size: {MAX_FILE_SIZE / 1024 / 1024}MB'}), 400
+
+    # Validate it's actually an image
+    try:
+        img = PILImage.open(file)
+        img.verify()
+        file.seek(0)  # Reset after verify
+    except Exception:
+        return jsonify({'error': 'Invalid image file'}), 400
+
+    # Sanitize filename
+    filename = secure_filename(file.filename)
+
+    # Check for duplicate filename
+    existing = Image.query.filter_by(filename=filename).first()
+    if existing:
+        return jsonify({'error': f'Image with filename "{filename}" already exists'}), 400
+
+    # Save file
+    images_dir = os.path.join(app.root_path, 'images')
+    if not os.path.exists(images_dir):
+        os.makedirs(images_dir)
+
+    file_path = os.path.join(images_dir, filename)
+    file.save(file_path)
+
+    # Add to database
+    new_image = Image(filename=filename, is_active=True)
+    db.session.add(new_image)
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'image': new_image.to_dict()
+    })
+
+
+@app.route('/admin/images/<int:image_id>/rename', methods=['POST'])
+@auth.login_required
+def rename_image(image_id):
+    """Rename an image."""
+    data = request.json
+    new_name = data.get('new_name', '').strip()
+
+    if not new_name:
+        return jsonify({'error': 'New name is required'}), 400
+
+    image = Image.query.get_or_404(image_id)
+    old_filename = image.filename
+
+    # Get extension
+    ext = os.path.splitext(old_filename)[1]
+
+    # Sanitize new name and add extension
+    safe_name = secure_filename(new_name)
+    if not safe_name.endswith(ext):
+        safe_name += ext
+
+    # Check for duplicate
+    if safe_name != old_filename:
+        existing = Image.query.filter_by(filename=safe_name).first()
+        if existing:
+            return jsonify({'error': f'Image with name "{safe_name}" already exists'}), 400
+
+    # Rename file on disk
+    images_dir = os.path.join(app.root_path, 'images')
+    old_path = os.path.join(images_dir, old_filename)
+    new_path = os.path.join(images_dir, safe_name)
+
+    try:
+        os.rename(old_path, new_path)
+    except Exception as e:
+        return jsonify({'error': f'Failed to rename file: {str(e)}'}), 500
+
+    # Update database
+    image.filename = safe_name
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'image': image.to_dict()
+    })
+
+
+@app.route('/admin/images/<int:image_id>/delete', methods=['POST'])
+@auth.login_required
+def delete_image(image_id):
+    """Delete an image."""
+    image = Image.query.get_or_404(image_id)
+
+    # Check if image is used in any active polls
+    active_poll = Poll.query.filter_by(status='active').first()
+    if active_poll:
+        # Check if this image is in any groups of the active poll
+        for group in active_poll.groups:
+            if image.id in [group.image1_id, group.image2_id, group.image3_id]:
+                return jsonify({'error': 'Cannot delete image that is in an active poll'}), 400
+
+    # Check if image is in active S/P session
+    active_session = SmashPassSession.query.filter_by(status='active').first()
+    if active_session:
+        image_order = json.loads(active_session.image_order)
+        if image.id in image_order:
+            return jsonify({'error': 'Cannot delete image that is in an active Smash or Pass session'}), 400
+
+    # Delete file from disk
+    images_dir = os.path.join(app.root_path, 'images')
+    file_path = os.path.join(images_dir, image.filename)
+
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    except Exception as e:
+        return jsonify({'error': f'Failed to delete file: {str(e)}'}), 500
+
+    # Delete from database
+    db.session.delete(image)
+    db.session.commit()
+
+    return jsonify({'success': True})
+
+
 @app.route('/admin/poll/create', methods=['POST'])
+@auth.login_required
 def create_poll():
     """Create a new poll with pre-generated groups."""
     # Get all active images
@@ -304,6 +481,7 @@ def create_poll():
 
 
 @app.route('/admin/poll/current', methods=['GET'])
+@auth.login_required
 def get_current_poll():
     """Get the current active or most recent poll."""
     poll = Poll.query.filter(Poll.status.in_(['setup', 'active'])).order_by(Poll.created_at.desc()).first()
@@ -331,6 +509,7 @@ def get_current_poll():
 
 
 @app.route('/admin/polls/all', methods=['GET'])
+@auth.login_required
 def get_all_polls():
     """Get all polls ordered by most recent."""
     polls = Poll.query.order_by(Poll.created_at.desc()).all()
@@ -338,6 +517,7 @@ def get_all_polls():
 
 
 @app.route('/admin/poll/<int:poll_id>/start', methods=['POST'])
+@auth.login_required
 def start_poll(poll_id):
     """Start a poll and activate the first group."""
     poll = Poll.query.get_or_404(poll_id)
@@ -367,6 +547,7 @@ def start_poll(poll_id):
 
 
 @app.route('/admin/poll/<int:poll_id>/next-group', methods=['POST'])
+@auth.login_required
 def next_group(poll_id):
     """Move to the next group in the poll."""
     poll = Poll.query.get_or_404(poll_id)
@@ -389,6 +570,7 @@ def next_group(poll_id):
 
 
 @app.route('/admin/poll/<int:poll_id>/end', methods=['POST'])
+@auth.login_required
 def end_poll(poll_id):
     """End the current poll."""
     poll = Poll.query.get_or_404(poll_id)
@@ -407,6 +589,7 @@ def end_poll(poll_id):
 
 
 @app.route('/admin/poll/<int:poll_id>/results/current', methods=['GET'])
+@auth.login_required
 def get_current_group_results(poll_id):
     """Get results for the current group."""
     poll = Poll.query.get_or_404(poll_id)
@@ -427,6 +610,7 @@ def get_current_group_results(poll_id):
 
 
 @app.route('/admin/poll/<int:poll_id>/results/cumulative', methods=['GET'])
+@auth.login_required
 def get_poll_cumulative_results(poll_id):
     """Get cumulative results for the entire poll."""
     poll = Poll.query.get_or_404(poll_id)
@@ -439,6 +623,7 @@ def get_poll_cumulative_results(poll_id):
 
 
 @app.route('/admin/qr', methods=['GET'])
+@auth.login_required
 def generate_admin_qr():
     """Generate QR code for users to join the poll."""
     # Get the base URL from the request
@@ -572,6 +757,7 @@ def get_poll_results(group_id):
 # ============================================================================
 
 @app.route('/slideshow')
+@auth.login_required
 def slideshow():
     """Image slideshow page."""
     return render_template('slideshow.html')
@@ -592,13 +778,15 @@ def get_slideshow_images():
 # ROUTES - SMASH OR PASS ADMIN
 # ============================================================================
 
-@app.route('/smashpass/admin')
+@app.route('/admin/smashpass')
+@auth.login_required
 def smashpass_admin():
     """Smash or Pass admin control page."""
     return render_template('smashpass_admin.html')
 
 
 @app.route('/smashpass/session/create', methods=['POST'])
+@auth.login_required
 def create_smashpass_session():
     """Create a new Smash or Pass session with randomized images."""
     # Auto-end any active MFK polls
@@ -641,6 +829,7 @@ def create_smashpass_session():
 
 
 @app.route('/smashpass/session/current', methods=['GET'])
+@auth.login_required
 def get_current_smashpass_session():
     """Get the current active Smash or Pass session."""
     session_obj = SmashPassSession.query.filter(
@@ -689,6 +878,7 @@ def get_current_smashpass_session():
 
 
 @app.route('/smashpass/session/<int:session_id>/start', methods=['POST'])
+@auth.login_required
 def start_smashpass_session(session_id):
     """Start the Smash or Pass session."""
     session_obj = SmashPassSession.query.get_or_404(session_id)
@@ -707,6 +897,7 @@ def start_smashpass_session(session_id):
 
 
 @app.route('/smashpass/session/<int:session_id>/next', methods=['POST'])
+@auth.login_required
 def next_smashpass_image(session_id):
     """Move to the next image in the session."""
     session_obj = SmashPassSession.query.get_or_404(session_id)
@@ -771,6 +962,7 @@ def next_smashpass_image(session_id):
 
 
 @app.route('/smashpass/session/<int:session_id>/end', methods=['POST'])
+@auth.login_required
 def end_smashpass_session(session_id):
     """End the current Smash or Pass session."""
     session_obj = SmashPassSession.query.get_or_404(session_id)
@@ -789,6 +981,7 @@ def end_smashpass_session(session_id):
 
 
 @app.route('/smashpass/sessions/all', methods=['GET'])
+@auth.login_required
 def get_all_smashpass_sessions():
     """Get all Smash or Pass sessions ordered by most recent."""
     sessions = SmashPassSession.query.order_by(SmashPassSession.created_at.desc()).all()
@@ -796,6 +989,7 @@ def get_all_smashpass_sessions():
 
 
 @app.route('/smashpass/session/<int:session_id>/results', methods=['GET'])
+@auth.login_required
 def get_smashpass_results(session_id):
     """Get results for the entire Smash or Pass session."""
     session_obj = SmashPassSession.query.get_or_404(session_id)

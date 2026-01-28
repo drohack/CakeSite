@@ -14,6 +14,8 @@ services:
     environment:
       # Change this to a secure random string in production
       - SECRET_KEY=change-this-secret-key-in-production
+      # Admin password for HTTP Basic Auth (default: admin123)
+      - ADMIN_PASSWORD=admin123
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/"]
