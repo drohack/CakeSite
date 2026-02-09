@@ -572,10 +572,13 @@ def upload_image():
         file.seek(0)
         img = PILImage.open(file)
         original_size = img.size
+        img_format = img.format
         img.verify()
         file.seek(0)  # Reset after verify
-    except Exception:
-        return jsonify({'error': 'Invalid image file'}), 400
+        print(f"Image validated: {file.filename}, format: {img_format}, size: {original_size}")
+    except Exception as e:
+        print(f"Image validation error for {file.filename}: {str(e)}")
+        return jsonify({'error': f'Invalid or unsupported image file: {str(e)}'}), 400
 
     # Sanitize filename
     filename = safe_filename(file.filename)
