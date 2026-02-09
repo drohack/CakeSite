@@ -42,6 +42,7 @@ images/**/*.gif
 images/**/*.webp
 images/**/*.bmp
 images/**/*.svg
+images/**/*.avif
 
 # Ignore all folders except default
 images/*

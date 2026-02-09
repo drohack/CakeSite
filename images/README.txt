@@ -14,6 +14,8 @@ Supported formats:
 - JPEG (.jpg, .jpeg)
 - GIF (.gif)
 - WebP (.webp)
+- AVIF (.avif)
+- BMP (.bmp)
 
 How it works:
 1. Create folders inside the images/ directory

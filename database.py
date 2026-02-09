@@ -216,7 +216,7 @@ def migrate_to_default_folder(app):
         root_image_files = []
         for filename in os.listdir(images_dir):
             file_path = os.path.join(images_dir, filename)
-            if os.path.isfile(file_path) and filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+            if os.path.isfile(file_path) and filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp')):
                 root_image_files.append(filename)
 
         # Only proceed if there are images to migrate
@@ -291,7 +291,7 @@ def init_db(app):
 
                     # Scan images in this folder
                     for filename in os.listdir(item_path):
-                        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp')):
                             existing = Image.query.filter_by(filename=filename, folder=folder_name).first()
                             if not existing:
                                 new_image = Image(filename=filename, folder=folder_name, is_active=True)

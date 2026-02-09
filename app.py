@@ -15,6 +15,10 @@ from database import db, init_db, Image, Folder, Poll, PollGroup, Submission, Sm
 from sqlalchemy import func
 import json
 from PIL import Image as PILImage
+try:
+    import pillow_avif  # Enable AVIF support
+except ImportError:
+    pass  # AVIF plugin not installed
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -38,7 +42,7 @@ auth = HTTPBasicAuth()
 
 # Get admin password from environment variable
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')  # Default password for development
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 MAX_IMAGE_DIMENSION = 1920  # Max width or height in pixels (for 1080p displays)
 
@@ -553,7 +557,7 @@ def upload_image():
         return jsonify({'error': 'No file selected'}), 400
 
     if not allowed_file(file.filename):
-        return jsonify({'error': 'Invalid file type. Allowed: PNG, JPG, JPEG, GIF, WEBP'}), 400
+        return jsonify({'error': 'Invalid file type. Allowed: PNG, JPG, JPEG, GIF, WEBP, AVIF, BMP'}), 400
 
     # Validate file size
     file.seek(0, 2)  # Seek to end
