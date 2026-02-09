@@ -32,3 +32,10 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Images (keep README.txt but ignore actual image files)
+images/*.png
+images/*.jpg
+images/*.jpeg
+images/*.gif
+images/*.webp
