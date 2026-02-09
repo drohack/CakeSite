@@ -7,6 +7,9 @@
     <header class="slideshow-header">
         <a href="/admin" class="btn btn-secondary btn-sm">Home</a>
         <div class="slideshow-controls">
+            <select id="folder-select" class="folder-dropdown">
+                <option value="all">All Folders</option>
+            </select>
             <button id="prev-btn" class="btn btn-secondary">← Previous</button>
             <button id="next-btn" class="btn btn-primary">Next →</button>
             <button id="show-grid-btn" class="btn btn-info">View All</button>
@@ -72,6 +75,23 @@
         padding: 10px 15px;
         background: rgba(0, 0, 0, 0.9);
         flex-shrink: 0;
+        gap: 15px;
+    }
+
+    .folder-dropdown {
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid #555;
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        font-size: 0.9rem;
+        min-width: 150px;
+        cursor: pointer;
+    }
+
+    .folder-dropdown option {
+        background: #1a1a1a;
+        color: #fff;
     }
 
     .slideshow-controls {

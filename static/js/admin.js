@@ -347,6 +347,15 @@ async function loadFolders() {
             option.textContent = `${folder.display_name} (${folder.image_count})`;
             select.appendChild(option);
         });
+
+        // Load from localStorage (synced across all pages)
+        const lastSelected = localStorage.getItem('lastSelectedFolder');
+        if (lastSelected) {
+            select.value = lastSelected;
+            // Trigger display update
+            displayImages();
+            loadSPSessionsDropdown();
+        }
     } catch (error) {
         console.error('Failed to load folders:', error);
     }
@@ -357,6 +366,8 @@ function setupFolderFilter() {
     const folderSelect = document.getElementById('folder-select');
     if (folderSelect) {
         folderSelect.addEventListener('change', () => {
+            // Save to localStorage (synced across all pages)
+            localStorage.setItem('lastSelectedFolder', folderSelect.value);
             displayImages(); // Re-filter and display
             loadSPSessionsDropdown(); // Reload S/P sessions for this folder
         });

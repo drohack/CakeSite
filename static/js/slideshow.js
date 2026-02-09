@@ -2,20 +2,73 @@
  * Slideshow JavaScript - Controls image slideshow (Manual navigation only)
  */
 
+let allImages = [];
 let images = [];
 let currentIndex = 0;
 let isGridView = false;
 
 // Initialize slideshow
 document.addEventListener('DOMContentLoaded', () => {
+    loadFolders();
     loadImages();
     setupControls();
+    setupFolderSync();
 });
 
-// Load all images
+// Load folders and populate dropdown
+async function loadFolders() {
+    try {
+        const folders = await apiCall('/admin/folders');
+        const select = document.getElementById('folder-select');
+        select.innerHTML = '<option value="all">All Folders</option>';
+
+        folders.forEach(folder => {
+            const option = document.createElement('option');
+            option.value = folder.name;
+            option.textContent = `${folder.display_name} (${folder.image_count})`;
+            select.appendChild(option);
+        });
+
+        // Load from localStorage
+        const lastSelected = localStorage.getItem('lastSelectedFolder');
+        if (lastSelected && lastSelected !== 'all') {
+            select.value = lastSelected;
+        }
+    } catch (error) {
+        console.error('Failed to load folders:', error);
+    }
+}
+
+// Setup folder sync with localStorage
+function setupFolderSync() {
+    const select = document.getElementById('folder-select');
+    select.addEventListener('change', () => {
+        // Save to localStorage
+        localStorage.setItem('lastSelectedFolder', select.value);
+        // Reload images with new filter
+        loadImages();
+    });
+}
+
+// Load all images (filtered by folder)
 async function loadImages() {
     try {
-        images = await apiCall('/slideshow/images');
+        allImages = await apiCall('/slideshow/images');
+
+        // Filter by selected folder
+        const selectedFolder = document.getElementById('folder-select').value;
+        if (selectedFolder === 'all') {
+            images = allImages;
+        } else {
+            images = allImages.filter(img => img.folder === selectedFolder);
+        }
+
+        // Reset view state
+        isGridView = false;
+        currentIndex = 0;
+
+        // Hide grid view, show slideshow
+        document.getElementById('grid-view').style.display = 'none';
 
         if (images.length === 0) {
             document.getElementById('slideshow-container').style.display = 'none';
@@ -23,6 +76,8 @@ async function loadImages() {
             return;
         }
 
+        document.getElementById('slideshow-container').style.display = 'flex';
+        document.getElementById('no-images').style.display = 'none';
         showImage(0);
     } catch (error) {
         console.error('Failed to load images:', error);

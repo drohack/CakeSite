@@ -1249,6 +1249,7 @@ def get_slideshow_images():
     return jsonify([{
         'id': img.id,
         'filename': img.filename,
+        'folder': img.folder,
         'name': os.path.splitext(img.filename)[0]  # Filename without extension
     } for img in images])
 

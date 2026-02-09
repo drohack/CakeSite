@@ -171,6 +171,17 @@ async function loadFolders() {
             option.textContent = `${folder.display_name} (${folder.image_count})`;
             select.appendChild(option);
         });
+
+        // Load from localStorage (synced across all pages)
+        const lastSelected = localStorage.getItem('lastSelectedFolder');
+        if (lastSelected && lastSelected !== 'all') {
+            select.value = lastSelected;
+        }
+
+        // Save changes to localStorage
+        select.addEventListener('change', () => {
+            localStorage.setItem('lastSelectedFolder', select.value);
+        });
     } catch (error) {
         console.error('Failed to load folders:', error);
     }
