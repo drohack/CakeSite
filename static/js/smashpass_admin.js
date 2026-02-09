@@ -28,6 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Auto-generate QR code on load
     loadQRCode();
 
+    // Load folders dropdown
+    loadFolders();
+
     // Check for existing session
     checkCurrentSession();
 
@@ -155,12 +158,31 @@ async function loadQRCode() {
     }
 }
 
+// Load folders and populate dropdown
+async function loadFolders() {
+    try {
+        const folders = await apiCall('/admin/folders');
+        const select = document.getElementById('folder-select');
+        select.innerHTML = '<option value="all">All Folders</option>';
+
+        folders.forEach(folder => {
+            const option = document.createElement('option');
+            option.value = folder.name;
+            option.textContent = `${folder.display_name} (${folder.image_count})`;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Failed to load folders:', error);
+    }
+}
+
 // Setup button handlers
 function setupButtonHandlers() {
     // Create Session (auto-starts)
     document.getElementById('create-session').addEventListener('click', async () => {
         try {
-            const result = await apiCall('/smashpass/session/create', 'POST');
+            const folder = document.getElementById('folder-select').value;
+            const result = await apiCall('/smashpass/session/create', 'POST', { folder });
             currentSession = result.session;
             currentSessionId = result.session.id;
             showNotificationCenter(`Session started with ${result.total_images} images`, 'success');

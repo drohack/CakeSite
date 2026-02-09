@@ -4,7 +4,11 @@ This guide will get you up and running in under 5 minutes.
 
 ## Option 1: Docker Compose (Recommended)
 
-1. **Add your images** to the `images/` folder
+1. **Organize your images** into folders:
+   ```bash
+   mkdir -p images/default
+   # Add images to images/default/ or create other folders
+   ```
 
 2. **Start the application**:
    ```bash
@@ -13,7 +17,9 @@ This guide will get you up and running in under 5 minutes.
 
 3. **Access the application**:
    - Open `http://localhost:5000` in your browser
-   - Go to Admin Panel: `http://localhost:5000/admin`
+   - Admin Panel: `http://localhost:5000/admin`
+   - Folder Manager: `http://localhost:5000/admin/folders/manage`
+   - Image Upload: `http://localhost:5000/admin/images/manage`
 
 4. **Stop the application**:
    ```bash
@@ -29,7 +35,11 @@ This guide will get you up and running in under 5 minutes.
    pip install -r requirements.txt
    ```
 
-3. **Add images** to the `images/` folder
+3. **Organize images** into folders:
+   ```bash
+   mkdir -p images/default
+   # Add images to images/default/ or use the UI to create folders
+   ```
 
 4. **Run the development server**:
    ```bash
@@ -73,16 +83,31 @@ This guide will get you up and running in under 5 minutes.
 
 ### As Admin:
 
-1. Go to `http://localhost:5000/admin`
-2. **Manage Images tab**: Toggle images on/off
-3. **Poll Control tab**:
-   - Generate QR code for users
-   - Create a new poll
-   - Start the poll
-   - Monitor submissions
-   - Click "Next Group" to move to next set of images
-   - End the poll when done
-4. **Results tab**: View current and cumulative results
+1. **Manage Folders** at `http://localhost:5000/admin/folders/manage`:
+   - Create folders (e.g., "characters", "party2024")
+   - Organize image sets
+
+2. **Upload Images** at `http://localhost:5000/admin/images/manage`:
+   - Select folder from dropdown
+   - Upload images or paste URLs (Ctrl+V)
+
+3. **Go to MFK Admin** at `http://localhost:5000/admin/mfk`:
+   - **Manage Images tab**:
+     - Select folder to view/manage
+     - Toggle images on/off
+   - **Poll Control tab**:
+     - Select folder for poll
+     - Generate QR code for users
+     - Create and start poll
+     - Monitor submissions
+     - Click "Next Group" to move to next set
+     - End poll (auto-switches to Results)
+   - **Results tab**: View current and cumulative results
+
+4. **Or use Smash or Pass** at `http://localhost:5000/admin/smashpass`:
+   - Select folder
+   - Create session to let users vote on each image
+   - Results auto-update image active/inactive status
 
 ### As User:
 
@@ -104,25 +129,33 @@ Or use any images you have. Supported formats: PNG, JPG, JPEG, GIF, WebP
 
 ## Testing Workflow
 
-1. Add at least 6 images to `images/` folder
-2. Start the application
-3. Open Admin Panel in one browser window
-4. Open Poll page in another window (or on phone)
-5. In Admin:
-   - Create poll (should create 2+ groups)
-   - Start poll
-6. In Poll:
-   - Drag and drop images
-   - Submit
-   - See results
-7. In Admin:
-   - Click "Next Group"
-8. In Poll:
-   - Page should automatically show new images
-   - Submit again
-9. In Admin:
-   - View cumulative results
-   - End poll
+1. **Setup**:
+   - Start the application
+   - Create a folder (e.g., "test") in Folder Manager
+   - Upload at least 6 images to that folder
+
+2. **Run Smash or Pass** (optional filtering):
+   - Go to S/P Admin, select "test" folder
+   - Create session
+   - Vote on images (sets active/inactive)
+
+3. **Run MFK Poll**:
+   - Open MFK Admin in one browser window
+   - Open user page in another window (or on phone)
+   - In Admin:
+     - Select "test" folder in Manage Images tab
+     - Verify which images are active
+     - Create poll (should create 2+ groups)
+   - In User page:
+     - Vote on images
+     - Submit and see results
+   - In Admin:
+     - Click "Next Group"
+     - User page auto-updates with new images
+   - Repeat until all groups complete
+   - In Admin:
+     - End poll (auto-switches to Results tab)
+     - View cumulative results
 
 ## Troubleshooting
 

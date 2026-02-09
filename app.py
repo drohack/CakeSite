@@ -8,11 +8,10 @@ from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_from_directory, session
 from flask_socketio import SocketIO, emit, join_room
 from flask_httpauth import HTTPBasicAuth
-from werkzeug.utils import secure_filename
 import qrcode
 from io import BytesIO
 import base64
-from database import db, init_db, Image, Poll, PollGroup, Submission, SmashPassSession, SmashPassVote
+from database import db, init_db, Image, Folder, Poll, PollGroup, Submission, SmashPassSession, SmashPassVote
 from sqlalchemy import func
 import json
 from PIL import Image as PILImage
@@ -52,6 +51,32 @@ def verify_password(username, password):
 def allowed_file(filename):
     """Check if file extension is allowed."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def safe_filename(filename):
+    """
+    Sanitize filename while preserving spaces, parentheses, and common punctuation.
+    More permissive than secure_filename() but still safe.
+    """
+    import re
+    import unicodedata
+
+    # Normalize unicode characters
+    filename = unicodedata.normalize('NFKD', filename)
+
+    # Remove path separators and other dangerous characters
+    dangerous_chars = ['/', '\\', '\0', '\n', '\r', '\t', '|', '<', '>', ':', '"', '?', '*']
+    for char in dangerous_chars:
+        filename = filename.replace(char, '')
+
+    # Remove leading/trailing dots and spaces (can cause issues on some filesystems)
+    filename = filename.strip('. ')
+
+    # Don't allow filenames that are just dots (., .., etc.)
+    if not filename or filename.count('.') == len(filename):
+        filename = 'unnamed'
+
+    return filename
 
 
 # ============================================================================
@@ -201,6 +226,13 @@ def image_manager():
     return render_template('image_manager.html')
 
 
+@app.route('/admin/folders/manage')
+@auth.login_required
+def folder_manager():
+    """Folder management page."""
+    return render_template('folder_manager.html')
+
+
 @app.route('/vote/current', methods=['GET'])
 def get_current_vote():
     """Get the currently active vote (either S/P or MFK)."""
@@ -270,8 +302,20 @@ def mfk_admin():
 
 @app.route('/images/<filename>')
 def serve_image(filename):
-    """Serve images from the images directory."""
-    return send_from_directory('images', filename)
+    """Serve images (looks up folder from database)."""
+    # Try to find image by filename
+    image = Image.query.filter_by(filename=filename).first()
+
+    if not image:
+        return "Image not found", 404
+
+    # Determine directory
+    if image.folder:
+        directory = os.path.join('images', image.folder)
+    else:
+        directory = 'images'
+
+    return send_from_directory(directory, filename)
 
 
 # ============================================================================
@@ -297,6 +341,82 @@ def toggle_image(image_id):
     return jsonify(image.to_dict())
 
 
+@app.route('/admin/images/upload-from-url', methods=['POST'])
+@auth.login_required
+def upload_image_from_url():
+    """Download and upload an image from URL (bypasses CORS)."""
+    import requests
+    from io import BytesIO
+
+    data = request.json
+    url = data.get('url')
+    folder = data.get('folder')
+
+    if not url:
+        return jsonify({'error': 'URL is required'}), 400
+
+    if not folder:
+        return jsonify({'error': 'Folder is required'}), 400
+
+    # Verify folder exists
+    if not Folder.query.filter_by(name=folder).first():
+        return jsonify({'error': 'Folder does not exist'}), 400
+
+    try:
+        # Download image from URL
+        response = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        response.raise_for_status()
+
+        # Check content type
+        content_type = response.headers.get('content-type', '')
+        if not content_type.startswith('image/'):
+            return jsonify({'error': 'URL does not point to an image'}), 400
+
+        # Get filename from URL
+        filename = url.split('/')[-1].split('?')[0]  # Remove query params
+        if not filename or '.' not in filename:
+            # Generate filename based on content type
+            ext = content_type.split('/')[-1]
+            filename = f'image.{ext}'
+
+        # Sanitize filename
+        filename = safe_filename(filename)
+
+        # Check for duplicate
+        existing = Image.query.filter_by(filename=filename, folder=folder).first()
+        if existing:
+            return jsonify({'error': f'Image with filename "{filename}" already exists in this folder'}), 400
+
+        # Validate it's actually an image
+        try:
+            img = PILImage.open(BytesIO(response.content))
+            img.verify()
+        except Exception:
+            return jsonify({'error': 'Invalid image file'}), 400
+
+        # Save to folder
+        folder_path = os.path.join(app.root_path, 'images', folder)
+        file_path = os.path.join(folder_path, filename)
+
+        with open(file_path, 'wb') as f:
+            f.write(response.content)
+
+        # Add to database
+        new_image = Image(filename=filename, folder=folder, is_active=True)
+        db.session.add(new_image)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'image': new_image.to_dict()
+        })
+
+    except requests.RequestException as e:
+        return jsonify({'error': f'Failed to download image: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': f'Failed to process image: {str(e)}'}), 500
+
+
 @app.route('/admin/images/upload', methods=['POST'])
 @auth.login_required
 def upload_image():
@@ -305,6 +425,14 @@ def upload_image():
         return jsonify({'error': 'No file provided'}), 400
 
     file = request.files['file']
+    folder = request.form.get('folder')  # Required
+
+    if not folder:
+        return jsonify({'error': 'Folder is required'}), 400
+
+    # Verify folder exists
+    if not Folder.query.filter_by(name=folder).first():
+        return jsonify({'error': 'Folder does not exist'}), 400
 
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
@@ -329,23 +457,20 @@ def upload_image():
         return jsonify({'error': 'Invalid image file'}), 400
 
     # Sanitize filename
-    filename = secure_filename(file.filename)
+    filename = safe_filename(file.filename)
 
-    # Check for duplicate filename
-    existing = Image.query.filter_by(filename=filename).first()
+    # Check for duplicate filename in this folder
+    existing = Image.query.filter_by(filename=filename, folder=folder).first()
     if existing:
-        return jsonify({'error': f'Image with filename "{filename}" already exists'}), 400
+        return jsonify({'error': f'Image with filename "{filename}" already exists in this folder'}), 400
 
-    # Save file
-    images_dir = os.path.join(app.root_path, 'images')
-    if not os.path.exists(images_dir):
-        os.makedirs(images_dir)
-
-    file_path = os.path.join(images_dir, filename)
+    # Save to folder
+    folder_path = os.path.join(app.root_path, 'images', folder)
+    file_path = os.path.join(folder_path, filename)
     file.save(file_path)
 
     # Add to database
-    new_image = Image(filename=filename, is_active=True)
+    new_image = Image(filename=filename, folder=folder, is_active=True)
     db.session.add(new_image)
     db.session.commit()
 
@@ -372,20 +497,24 @@ def rename_image(image_id):
     ext = os.path.splitext(old_filename)[1]
 
     # Sanitize new name and add extension
-    safe_name = secure_filename(new_name)
-    if not safe_name.endswith(ext):
-        safe_name += ext
+    sanitized_name = safe_filename(new_name)
+    if not sanitized_name.endswith(ext):
+        sanitized_name += ext
 
-    # Check for duplicate
-    if safe_name != old_filename:
-        existing = Image.query.filter_by(filename=safe_name).first()
+    # Check for duplicate in the same folder
+    if sanitized_name != old_filename:
+        existing = Image.query.filter_by(filename=sanitized_name, folder=image.folder).first()
         if existing:
-            return jsonify({'error': f'Image with name "{safe_name}" already exists'}), 400
+            return jsonify({'error': f'Image with name "{sanitized_name}" already exists in this folder'}), 400
 
     # Rename file on disk
-    images_dir = os.path.join(app.root_path, 'images')
+    if image.folder:
+        images_dir = os.path.join(app.root_path, 'images', image.folder)
+    else:
+        images_dir = os.path.join(app.root_path, 'images')
+
     old_path = os.path.join(images_dir, old_filename)
-    new_path = os.path.join(images_dir, safe_name)
+    new_path = os.path.join(images_dir, sanitized_name)
 
     try:
         os.rename(old_path, new_path)
@@ -393,7 +522,7 @@ def rename_image(image_id):
         return jsonify({'error': f'Failed to rename file: {str(e)}'}), 500
 
     # Update database
-    image.filename = safe_name
+    image.filename = sanitized_name
     db.session.commit()
 
     return jsonify({
@@ -424,7 +553,11 @@ def delete_image(image_id):
             return jsonify({'error': 'Cannot delete image that is in an active Smash or Pass session'}), 400
 
     # Delete file from disk
-    images_dir = os.path.join(app.root_path, 'images')
+    if image.folder:
+        images_dir = os.path.join(app.root_path, 'images', image.folder)
+    else:
+        images_dir = os.path.join(app.root_path, 'images')
+
     file_path = os.path.join(images_dir, image.filename)
 
     try:
@@ -440,12 +573,220 @@ def delete_image(image_id):
     return jsonify({'success': True})
 
 
+@app.route('/admin/folders', methods=['GET'])
+@auth.login_required
+def get_folders():
+    """Get all folders with image counts."""
+    folders = Folder.query.all()
+    result = []
+    for folder in folders:
+        count = Image.query.filter_by(folder=folder.name).count()
+        result.append({
+            'id': folder.id,
+            'name': folder.name,
+            'display_name': folder.display_name,
+            'image_count': count
+        })
+    return jsonify(result)
+
+
+@app.route('/admin/folders', methods=['POST'])
+@auth.login_required
+def create_folder():
+    """Create a new folder."""
+    import re
+    data = request.json
+    name = data.get('name', '').strip()
+    display_name = data.get('display_name', name)
+
+    # Validate folder name
+    if not name or not re.match(r'^[a-zA-Z0-9_\-]+$', name):
+        return jsonify({'error': 'Invalid folder name. Use only letters, numbers, underscores, and hyphens.'}), 400
+
+    # Check if exists
+    if Folder.query.filter_by(name=name).first():
+        return jsonify({'error': 'Folder already exists'}), 400
+
+    # Create folder on filesystem
+    folder_path = os.path.join(app.root_path, 'images', name)
+    os.makedirs(folder_path, exist_ok=True)
+
+    # Create in database
+    folder = Folder(name=name, display_name=display_name)
+    db.session.add(folder)
+    db.session.commit()
+
+    return jsonify({'success': True, 'folder': folder.to_dict()})
+
+
+@app.route('/admin/folders/<int:folder_id>', methods=['DELETE'])
+@auth.login_required
+def delete_folder(folder_id):
+    """Delete a folder (only if empty)."""
+    import shutil
+    folder = Folder.query.get_or_404(folder_id)
+
+    # Check if folder has images
+    image_count = Image.query.filter_by(folder=folder.name).count()
+    if image_count > 0:
+        return jsonify({'error': f'Cannot delete folder with {image_count} images'}), 400
+
+    # Delete from filesystem
+    folder_path = os.path.join(app.root_path, 'images', folder.name)
+    if os.path.exists(folder_path):
+        shutil.rmtree(folder_path)
+
+    # Delete from database
+    db.session.delete(folder)
+    db.session.commit()
+
+    return jsonify({'success': True})
+
+
+@app.route('/admin/images/sync', methods=['GET', 'POST'])
+@auth.login_required
+def sync_database():
+    """Sync database with filesystem (scan or apply)."""
+    if request.method == 'GET':
+        # Scan and report issues without making changes
+        report = scan_filesystem_vs_database()
+        return jsonify(report)
+    else:
+        # Apply fixes
+        result = apply_database_sync()
+        return jsonify(result)
+
+
+def scan_filesystem_vs_database():
+    """Scan filesystem and database to find inconsistencies."""
+    images_dir = os.path.join(app.root_path, 'images')
+
+    orphaned_records = []  # In DB but file doesn't exist
+    orphaned_files = []     # File exists but not in DB
+    missing_folders = []    # Directory exists but no Folder record
+    in_sync_count = 0
+
+    # Get all folders from database
+    db_folders = {f.name: f for f in Folder.query.all()}
+
+    # Scan filesystem for folders
+    if os.path.exists(images_dir):
+        for item in os.listdir(images_dir):
+            item_path = os.path.join(images_dir, item)
+
+            if os.path.isdir(item_path):
+                folder_name = item
+
+                # Check if folder is in database
+                if folder_name not in db_folders:
+                    # Count images in this folder
+                    image_count = 0
+                    for filename in os.listdir(item_path):
+                        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                            image_count += 1
+
+                    missing_folders.append({
+                        'name': folder_name,
+                        'image_count': image_count
+                    })
+
+                # Scan images in this folder
+                db_images_in_folder = {img.filename: img for img in Image.query.filter_by(folder=folder_name).all()}
+
+                for filename in os.listdir(item_path):
+                    if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                        if filename not in db_images_in_folder:
+                            # File exists but not in database
+                            orphaned_files.append({
+                                'filename': filename,
+                                'folder': folder_name
+                            })
+                        else:
+                            in_sync_count += 1
+
+    # Check for orphaned database records (file doesn't exist)
+    all_db_images = Image.query.all()
+    for image in all_db_images:
+        if image.folder:
+            image_path = os.path.join(images_dir, image.folder, image.filename)
+        else:
+            image_path = os.path.join(images_dir, image.filename)
+
+        if not os.path.exists(image_path):
+            orphaned_records.append({
+                'id': image.id,
+                'filename': image.filename,
+                'folder': image.folder or 'root'
+            })
+
+    return {
+        'in_sync_count': in_sync_count,
+        'orphaned_records': orphaned_records,
+        'orphaned_files': orphaned_files,
+        'missing_folders': missing_folders,
+        'total_issues': len(orphaned_records) + len(orphaned_files) + len(missing_folders)
+    }
+
+
+def apply_database_sync():
+    """Apply database sync fixes."""
+    images_dir = os.path.join(app.root_path, 'images')
+
+    removed_records = 0
+    added_files = 0
+    created_folders = 0
+
+    # Get current state
+    report = scan_filesystem_vs_database()
+
+    # Remove orphaned database records
+    for record in report['orphaned_records']:
+        image = Image.query.get(record['id'])
+        if image:
+            db.session.delete(image)
+            removed_records += 1
+
+    # Add orphaned files to database
+    for file_info in report['orphaned_files']:
+        new_image = Image(
+            filename=file_info['filename'],
+            folder=file_info['folder'],
+            is_active=True
+        )
+        db.session.add(new_image)
+        added_files += 1
+
+    # Create missing folder records
+    for folder_info in report['missing_folders']:
+        new_folder = Folder(
+            name=folder_info['name'],
+            display_name=folder_info['name'].replace('_', ' ').replace('-', ' ').title()
+        )
+        db.session.add(new_folder)
+        created_folders += 1
+
+    db.session.commit()
+
+    return {
+        'success': True,
+        'removed_records': removed_records,
+        'added_files': added_files,
+        'created_folders': created_folders
+    }
+
+
 @app.route('/admin/poll/create', methods=['POST'])
 @auth.login_required
 def create_poll():
     """Create a new poll with pre-generated groups."""
-    # Get all active images
-    active_images = Image.query.filter_by(is_active=True).all()
+    data = request.json or {}
+    folder = data.get('folder')  # Can be 'all', specific folder name, or None
+
+    # Get active images
+    if folder == 'all' or folder is None:
+        active_images = Image.query.filter_by(is_active=True).all()
+    else:
+        active_images = Image.query.filter_by(is_active=True, folder=folder).all()
 
     if len(active_images) < 3:
         return jsonify({'error': 'Need at least 3 active images to create a poll'}), 400
@@ -789,6 +1130,9 @@ def smashpass_admin():
 @auth.login_required
 def create_smashpass_session():
     """Create a new Smash or Pass session with randomized images."""
+    data = request.json or {}
+    folder = data.get('folder')  # Can be 'all', specific folder name, or None
+
     # Auto-end any active MFK polls
     active_polls = Poll.query.filter_by(status='active').all()
     for poll in active_polls:
@@ -798,8 +1142,11 @@ def create_smashpass_session():
         db.session.commit()
         socketio.emit('poll_ended', {}, room='poll')
 
-    # Get all images
-    all_images = Image.query.all()
+    # Get images
+    if folder == 'all' or folder is None:
+        all_images = Image.query.all()
+    else:
+        all_images = Image.query.filter_by(folder=folder).all()
 
     if len(all_images) == 0:
         return jsonify({'error': 'No images available'}), 400
@@ -811,6 +1158,7 @@ def create_smashpass_session():
     # Create session and auto-start it
     session_obj = SmashPassSession(
         status='active',
+        folder=folder if folder != 'all' else None,
         image_order=json.dumps(image_ids),
         current_image_index=0,
         started_at=datetime.utcnow()

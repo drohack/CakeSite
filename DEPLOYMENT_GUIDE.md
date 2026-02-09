@@ -5,7 +5,9 @@
 ### Option 1: Docker Compose (Easiest)
 
 ```bash
-# 1. Add images to the images/ folder
+# 1. Organize images into folders
+mkdir -p images/default
+# Add images to folders or use the web UI
 
 # 2. Start the application
 docker-compose up -d
@@ -35,10 +37,12 @@ docker-compose down
    cd /mnt/user/appdata/MarryFKill_Quiz
    ```
 
-3. **Add images**:
+3. **Organize images**:
    ```bash
-   # Copy images to the images/ folder
-   cp /path/to/your/images/* ./images/
+   # Create folders and add images
+   mkdir -p ./images/default
+   cp /path/to/your/images/* ./images/default/
+   # Or use the web UI at /admin/folders/manage
    ```
 
 4. **Start with Docker Compose**:
@@ -56,14 +60,15 @@ docker-compose down
 
 2. **Create directories on Unraid**:
    ```bash
-   mkdir -p /mnt/user/appdata/fmk-quiz/images
+   mkdir -p /mnt/user/appdata/fmk-quiz/images/default
    mkdir -p /mnt/user/appdata/fmk-quiz/data
    ```
 
 3. **Add images**:
    ```bash
-   # Copy your images
-   cp /path/to/images/* /mnt/user/appdata/fmk-quiz/images/
+   # Organize images into folders
+   cp /path/to/images/* /mnt/user/appdata/fmk-quiz/images/default/
+   # Or use the web UI to create folders and upload
    ```
 
 4. **In Unraid Docker UI**, add container:
@@ -85,7 +90,7 @@ docker-compose down
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Add images to images/ folder
+# 2. Organize images into folders (images/default/, etc.)
 
 # 3. Run the development server
 python run_dev.py
@@ -326,14 +331,14 @@ curl http://localhost:5000/
 
 ### Optimize Images
 
-Before adding to `images/` folder:
+Before adding to `images/` folders:
 ```bash
-# Resize large images
-mogrify -resize 1000x1000\> -quality 85 images/*.jpg
+# Resize large images in a folder
+mogrify -resize 1000x1000\> -quality 85 images/default/*.jpg
 
-# Or use ImageMagick
-for img in images/*; do
-  convert "$img" -resize 1000x1000\> -quality 85 "optimized_$img"
+# Or use ImageMagick for all folders
+for img in images/*/*.{jpg,png}; do
+  convert "$img" -resize 1000x1000\> -quality 85 "$img"
 done
 ```
 

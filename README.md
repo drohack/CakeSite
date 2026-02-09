@@ -4,7 +4,9 @@ A full-featured interactive polling web application for playing "Marry, F, Kill"
 
 ## Features
 
-- **Image Management**: Upload images to a folder and toggle their availability for polls
+- **Folder-Based Organization**: Organize images into folders by theme, event, or category
+- **Selective Polling**: Create polls from specific folders or all folders combined
+- **Image Management**: Upload, rename, delete images, and toggle their availability for polls
 - **Admin Control Panel**: Full control over poll creation, execution, and results
 - **Real-time Updates**: Live results using WebSockets
 - **Mobile-First Design**: Optimized for mobile devices with drag-and-drop interface
@@ -25,7 +27,10 @@ MarryFKill_Quiz/
 ├── .dockerignore         # Docker ignore file
 ├── .gitignore           # Git ignore file
 ├── README.md            # This file
-├── images/              # Place your images here
+├── images/              # Image storage (organized by folders)
+│   ├── default/         # Default folder
+│   ├── characters/      # Example folder
+│   └── party2024/       # Example folder
 ├── static/
 │   ├── css/
 │   │   └── style.css    # Main stylesheet
@@ -52,9 +57,11 @@ MarryFKill_Quiz/
 1. **Clone or download this repository**
 
 2. **Add your images**
-   - Place image files in the `images/` folder
+   - Organize images into folders: `images/default/`, `images/characters/`, etc.
    - Supported formats: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`
    - Images are automatically detected on startup
+   - Use the Folder Manager UI at `/admin/folders/manage` to create folders
+   - **Note**: On first run, existing images are migrated to `images/default/`
 
 3. **Build the Docker image**
    ```bash
@@ -105,22 +112,33 @@ MarryFKill_Quiz/
 
 ### Admin Workflow
 
-1. **Navigate to Admin Panel** (`/admin`)
+1. **Manage Folders** (`/admin/folders/manage`):
+   - Create new folders (e.g., "characters", "party2024")
+   - View folders with image counts
+   - Delete empty folders
 
-2. **Manage Images Tab**:
-   - View all images in the `images/` folder
+2. **Upload Images** (`/admin/images/manage`):
+   - Select folder from dropdown
+   - Upload, rename, or delete images
+   - Toggle images as Active/Inactive
+
+3. **Navigate to Admin Panel** (`/admin`)
+
+4. **Manage Images Tab**:
+   - View all images organized by folder
    - Toggle images as Active/Inactive
    - Only active images will be included in polls
 
-3. **Poll Control Tab**:
+5. **Poll Control Tab**:
+   - **Select folder** from dropdown (specific folder or "All Folders")
    - Click **"Generate QR Code"** to create a QR code for users
-   - Click **"Create New Poll"** to generate a new poll with random groups
+   - Click **"Create New Poll"** to generate a poll with images from selected folder(s)
    - Click **"Start Poll"** to activate the first group
    - Monitor live submissions for the current group
    - Click **"Next Group"** to move to the next set of 3 images
    - Click **"End Poll"** when finished
 
-4. **Results Tab**:
+6. **Results Tab**:
    - **Current Group**: See results for the active group
    - **Cumulative Results**: See overall results across all groups
    - Results update automatically in real-time
@@ -181,7 +199,15 @@ All data is stored in a SQLite database (`fmk_quiz.db`):
 ### Images Table
 - `id`: Primary key
 - `filename`: Image filename
+- `folder`: Folder name (nullable)
 - `is_active`: Boolean for availability
+- `created_at`: Timestamp
+- **Unique Constraint**: (folder, filename) - Same filename allowed in different folders
+
+### Folders Table
+- `id`: Primary key
+- `name`: Folder name (unique, alphanumeric + underscore/hyphen)
+- `display_name`: Human-readable name
 - `created_at`: Timestamp
 
 ### Polls Table
@@ -213,9 +239,20 @@ All data is stored in a SQLite database (`fmk_quiz.db`):
 
 ### Admin Endpoints
 
+**Folder Management:**
+- `GET /admin/folders` - Get all folders with image counts
+- `POST /admin/folders` - Create new folder
+- `DELETE /admin/folders/<id>` - Delete folder (only if empty)
+
+**Image Management:**
 - `GET /admin/images` - Get all images
+- `POST /admin/images/upload` - Upload image (requires folder parameter)
 - `POST /admin/images/<id>/toggle` - Toggle image active status
-- `POST /admin/poll/create` - Create new poll
+- `POST /admin/images/<id>/rename` - Rename image
+- `POST /admin/images/<id>/delete` - Delete image
+
+**Poll Management:**
+- `POST /admin/poll/create` - Create new poll (optional folder parameter)
 - `GET /admin/poll/current` - Get current poll status
 - `POST /admin/poll/<id>/start` - Start poll
 - `POST /admin/poll/<id>/next-group` - Move to next group
@@ -223,6 +260,12 @@ All data is stored in a SQLite database (`fmk_quiz.db`):
 - `GET /admin/poll/<id>/results/current` - Get current group results
 - `GET /admin/poll/<id>/results/cumulative` - Get cumulative results
 - `GET /admin/qr` - Generate QR code
+
+**Smash or Pass:**
+- `POST /smashpass/session/create` - Create session (optional folder parameter)
+- `GET /smashpass/session/current` - Get current session
+- `POST /smashpass/session/<id>/next` - Move to next image
+- `POST /smashpass/session/<id>/end` - End session
 
 ### User Endpoints
 
@@ -248,7 +291,14 @@ docker run -p 8080:5000 fmk-quiz
 
 ### Adding More Images
 
-Simply add image files to the `images/` folder and restart the container. New images will be automatically detected and set to active.
+**Via UI (Recommended)**:
+1. Navigate to `/admin/folders/manage` to create folders
+2. Go to `/admin/images/manage` to upload images to specific folders
+
+**Via Filesystem**:
+1. Create folders in `images/` directory (e.g., `images/party2024/`)
+2. Add image files to the folders
+3. Restart the container - new images will be automatically detected
 
 ### Styling
 

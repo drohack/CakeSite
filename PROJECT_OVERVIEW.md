@@ -19,8 +19,13 @@ MarryFKill_Quiz/
 │   └── templates/
 │       ├── base.html              # Base template with common layout
 │       ├── index.html             # Home/landing page
-│       ├── admin.html             # Admin control panel
-│       └── poll.html              # User polling interface
+│       ├── admin.html             # MFK Admin control panel
+│       ├── poll.html              # User polling interface
+│       ├── smashpass_admin.html   # Smash or Pass admin
+│       ├── vote.html              # Unified voting page (MFK + S/P)
+│       ├── slideshow.html         # Image slideshow
+│       ├── image_manager.html     # Image upload/rename/delete
+│       └── folder_manager.html    # Folder management
 │
 ├── 💅 Styling
 │   └── static/css/
@@ -29,12 +34,19 @@ MarryFKill_Quiz/
 ├── ⚡ JavaScript
 │   └── static/js/
 │       ├── main.js                # Common utilities and Socket.IO setup
-│       ├── admin.js               # Admin panel functionality
-│       └── poll.js                # User poll interface with drag-and-drop
+│       ├── admin.js               # MFK Admin panel functionality
+│       ├── smashpass_admin.js     # Smash or Pass admin
+│       ├── vote.js                # Unified voting interface
+│       ├── slideshow.js           # Slideshow controls
+│       ├── image_manager.js       # Image upload/management
+│       └── folder_manager.js      # Folder management
 │
-├── 🖼️ Images
+├── 🖼️ Images (Folder-Based Organization)
 │   └── images/
-│       └── README.txt             # Instructions for adding images
+│       ├── README.txt             # Instructions for adding images
+│       ├── default/               # Default folder
+│       ├── characters/            # Example: Character images
+│       └── party2024/             # Example: Event-specific images
 │
 ├── 📚 Documentation
 │   ├── README.md                  # Complete documentation
@@ -73,11 +85,14 @@ MarryFKill_Quiz/
 
 ## Key Features Implementation
 
-### 1. Image Management
-- **Location**: `images/` folder
-- **Detection**: Automatic on startup (database.py:90-103)
-- **Toggle**: Admin can enable/disable (app.py:144-152)
+### 1. Folder-Based Image Organization
+- **Location**: `images/` folder with subfolders (e.g., `images/default/`, `images/party2024/`)
+- **Management**: Create/delete folders via UI (`/admin/folders/manage`)
+- **Upload**: Upload images to specific folders (`/admin/images/manage`)
+- **Detection**: Automatic folder scanning on startup
+- **Toggle**: Admin can enable/disable per image
 - **Supported formats**: PNG, JPG, JPEG, GIF, WebP
+- **Features**: Paste URLs to upload, rename with spaces/parentheses, database sync tool
 
 ### 2. Admin Panel (`/admin`)
 **Three tabs:**
@@ -121,19 +136,29 @@ MarryFKill_Quiz/
 
 ### 5. Database Schema
 
-**4 Tables:**
+**6 Tables:**
 
 1. **images**
-   - id, filename, is_active, created_at
+   - id, filename, folder, is_active, created_at
+   - Unique constraint: (folder, filename)
 
-2. **polls**
+2. **folders**
+   - id, name, display_name, created_at
+
+3. **polls**
    - id, status (setup/active/ended), started_at, ended_at, current_group
 
-3. **poll_groups**
+4. **poll_groups**
    - id, poll_id, group_number, image1_id, image2_id, image3_id
 
-4. **submissions**
+5. **submissions**
    - id, poll_id, group_id, user_id, marry_image_id, f_image_id, kill_image_id
+
+6. **smashpass_sessions**
+   - id, status, folder, current_image_index, image_order, started_at, ended_at
+
+7. **smashpass_votes**
+   - id, session_id, image_id, user_id, vote (smash/pass), submitted_at
 
 ### 6. Real-time Communication
 
@@ -152,10 +177,26 @@ MarryFKill_Quiz/
 
 ### Admin Endpoints
 ```
-GET    /admin                                  # Admin panel page
+# Folder Management
+GET    /admin/folders                          # List all folders with image counts
+POST   /admin/folders                          # Create new folder
+DELETE /admin/folders/<id>                     # Delete folder (if empty)
+GET    /admin/folders/manage                   # Folder management UI
+
+# Image Management
 GET    /admin/images                           # List all images
+POST   /admin/images/upload                    # Upload image (requires folder)
+POST   /admin/images/upload-from-url           # Upload from URL
 POST   /admin/images/<id>/toggle               # Toggle image active status
-POST   /admin/poll/create                      # Create new poll
+POST   /admin/images/<id>/rename               # Rename image
+POST   /admin/images/<id>/delete               # Delete image
+GET    /admin/images/sync                      # Scan for sync issues
+POST   /admin/images/sync                      # Apply sync fixes
+GET    /admin/images/manage                    # Image management UI
+
+# MFK Poll Management
+GET    /admin/mfk                              # MFK Admin UI
+POST   /admin/poll/create                      # Create new poll (optional folder param)
 GET    /admin/poll/current                     # Get current poll info
 POST   /admin/poll/<id>/start                  # Start poll
 POST   /admin/poll/<id>/next-group             # Move to next group
@@ -163,6 +204,14 @@ POST   /admin/poll/<id>/end                    # End poll
 GET    /admin/poll/<id>/results/current        # Current group results
 GET    /admin/poll/<id>/results/cumulative     # All groups results
 GET    /admin/qr                               # Generate QR code
+
+# Smash or Pass Management
+GET    /admin/smashpass                        # S/P Admin UI
+POST   /smashpass/session/create               # Create session (optional folder param)
+GET    /smashpass/session/current              # Get current session
+POST   /smashpass/session/<id>/next            # Move to next image
+POST   /smashpass/session/<id>/end             # End session
+GET    /smashpass/session/<id>/results         # Get session results
 ```
 
 ### User Endpoints

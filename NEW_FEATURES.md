@@ -2,7 +2,73 @@
 
 ## 🎉 What's New
 
-Your FMK Quiz application now includes **two brand new features** in addition to the original Marry, F, Kill game!
+Your FMK Quiz application now includes **folder-based image organization** plus two interactive game features!
+
+---
+
+## 📁 Feature: Folder-Based Image Organization
+
+Organize your images into folders for better management and themed polls!
+
+### What's New
+- **Multiple Folders**: Organize images by theme, event, or category (e.g., "Characters", "Landscapes", "Party2024")
+- **Folder Manager**: Web UI to create and manage folders
+- **Selective Polls**: Create MFK polls or S/P sessions from specific folders or all folders
+- **Easy Uploads**: Upload images directly to specific folders
+
+### Key Features
+
+✅ **Folder Management UI**: Create and delete folders via `/admin/folders/manage`
+✅ **Organized Storage**: `images/default/`, `images/characters/`, etc.
+✅ **Selective Polling**: Choose specific folder or "All Folders" when creating polls
+✅ **Easy Uploads**: Select folder before uploading images
+✅ **Auto-Migration**: Existing images automatically moved to "default" folder on first run
+
+### How to Use
+
+#### 1. Manage Folders
+**URL**: http://localhost:5000/admin/folders/manage
+
+- Click "Create Folder"
+- Enter folder name (e.g., "characters", "party2024")
+- Enter display name (e.g., "Characters", "Party 2024")
+- View all folders with image counts
+- Delete empty folders
+
+#### 2. Upload Images to Folders
+**URL**: http://localhost:5000/admin/images/manage
+
+- Select folder from dropdown
+- Upload images (drag & drop or click)
+- Images are saved to the selected folder
+
+#### 3. Create Polls from Specific Folders
+**MFK Admin** (http://localhost:5000/admin/mfk):
+- Select folder from dropdown (or "All Folders")
+- Click "Create Poll"
+- Only images from selected folder(s) will be included
+
+**Smash or Pass Admin** (http://localhost:5000/admin/smashpass):
+- Select folder from dropdown (or "All Folders")
+- Click "Create Session"
+- Only images from selected folder(s) will be included
+
+### Folder Naming Rules
+- Use only letters, numbers, underscores, and hyphens
+- Examples: `characters`, `party_2024`, `landscapes`, `my-event`
+- Display names can have spaces: "My Event", "Party 2024"
+
+### Database Changes
+- **Images table**: Added `folder` column
+- **New Folders table**: Stores folder metadata
+- **Composite unique constraint**: Same filename allowed in different folders
+
+### Migration
+On first startup after upgrade:
+1. Creates "default" folder
+2. Moves all root images to `images/default/`
+3. Updates database records
+4. Clears existing polls (clean slate)
 
 ---
 

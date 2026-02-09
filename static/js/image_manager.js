@@ -8,11 +8,42 @@ let pendingFileName = '';
 
 // Initialize image manager
 document.addEventListener('DOMContentLoaded', () => {
+    loadFolders();
     loadImages();
     setupFileUpload();
     setupDragAndDrop();
     setupClipboardPaste();
+    setupFolderFilter();
+    setupSyncDatabase();
 });
+
+// Load folders and populate dropdown
+async function loadFolders() {
+    try {
+        const folders = await apiCall('/admin/folders');
+        const select = document.getElementById('folder-select-upload');
+        select.innerHTML = '<option value="">Select folder...</option>';
+
+        folders.forEach(folder => {
+            const option = document.createElement('option');
+            option.value = folder.name;
+            option.textContent = `${folder.display_name} (${folder.image_count})`;
+            select.appendChild(option);
+        });
+
+        // Check if folder parameter in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const folderParam = urlParams.get('folder');
+        if (folderParam) {
+            select.value = folderParam;
+            // Trigger filter update
+            displayImages();
+        }
+    } catch (error) {
+        console.error('Failed to load folders:', error);
+        showNotification('Failed to load folders: ' + error.message, 'error');
+    }
+}
 
 // Load all images
 async function loadImages() {
@@ -24,19 +55,38 @@ async function loadImages() {
     }
 }
 
-// Display images in grid
+// Display images in grid (filtered by selected folder)
 function displayImages() {
     const grid = document.getElementById('images-grid');
     grid.innerHTML = '';
 
-    if (images.length === 0) {
-        grid.innerHTML = '<div class="no-images"><h2>No images found</h2><p>Upload images to get started</p></div>';
+    // Get selected folder
+    const selectedFolder = document.getElementById('folder-select-upload').value;
+
+    // Filter images by folder
+    const filteredImages = selectedFolder
+        ? images.filter(img => img.folder === selectedFolder)
+        : images;
+
+    if (filteredImages.length === 0) {
+        const message = selectedFolder
+            ? `<h2>No images in this folder</h2><p>Upload images to get started</p>`
+            : `<h2>Select a folder</h2><p>Choose a folder to view and manage its images</p>`;
+        grid.innerHTML = `<div class="no-images">${message}</div>`;
         return;
     }
 
-    images.forEach(image => {
+    filteredImages.forEach(image => {
         const card = createImageCard(image);
         grid.appendChild(card);
+    });
+}
+
+// Setup folder filter change handler
+function setupFolderFilter() {
+    const select = document.getElementById('folder-select-upload');
+    select.addEventListener('change', () => {
+        displayImages();
     });
 }
 
@@ -137,20 +187,115 @@ function setupDragAndDrop() {
 
 // Setup clipboard paste
 function setupClipboardPaste() {
-    document.addEventListener('paste', (e) => {
+    document.addEventListener('paste', async (e) => {
         const items = e.clipboardData.items;
 
+        // First check for actual image data
         for (const item of items) {
             if (item.type.indexOf('image') !== -1) {
                 const file = item.getAsFile();
                 if (file) {
                     e.preventDefault();
                     showPreviewModal(file);
-                    break;
+                    return;
                 }
             }
         }
+
+        // Check for text (might be a URL)
+        for (const item of items) {
+            if (item.type === 'text/plain') {
+                e.preventDefault();
+                item.getAsString(async (text) => {
+                    const trimmedText = text.trim();
+
+                    // Check if it looks like a URL
+                    if (isImageURL(trimmedText)) {
+                        await handleImageURL(trimmedText);
+                    }
+                });
+                break;
+            }
+        }
     });
+}
+
+// Check if text is an image URL
+function isImageURL(text) {
+    try {
+        const url = new URL(text);
+        // Check if URL ends with common image extensions
+        const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'];
+        const pathname = url.pathname.toLowerCase();
+        return imageExtensions.some(ext => pathname.endsWith(ext));
+    } catch {
+        return false;
+    }
+}
+
+// Handle pasted image URL
+async function handleImageURL(url) {
+    try {
+        showNotification('Downloading image from URL...', 'info');
+
+        // Try client-side fetch first
+        try {
+            const response = await fetch(url);
+            if (response.ok) {
+                const blob = await response.blob();
+
+                // Check if it's actually an image
+                if (blob.type.startsWith('image/')) {
+                    // Extract filename from URL
+                    const urlPath = new URL(url).pathname;
+                    const filename = urlPath.split('/').pop() || 'image.png';
+
+                    // Convert blob to file
+                    const file = new File([blob], filename, { type: blob.type });
+
+                    // Show preview modal
+                    showPreviewModal(file);
+                    showNotification('Image loaded from URL', 'success');
+                    return;
+                }
+            }
+        } catch (fetchError) {
+            // CORS or network error - try server-side download
+            console.log('Client-side fetch failed, trying server-side:', fetchError);
+        }
+
+        // Fallback: use server-side download (bypasses CORS)
+        await handleImageURLServerSide(url);
+
+    } catch (error) {
+        console.error('Failed to load image from URL:', error);
+        showNotification('Failed to load image from URL: ' + error.message, 'error');
+    }
+}
+
+// Handle image URL via server-side download (CORS bypass)
+async function handleImageURLServerSide(url) {
+    const folder = document.getElementById('folder-select-upload').value;
+
+    if (!folder) {
+        showNotification('Please select a folder first', 'error');
+        return;
+    }
+
+    try {
+        // Download via server
+        const result = await apiCall('/admin/images/upload-from-url', 'POST', {
+            url: url,
+            folder: folder
+        });
+
+        showNotification(`Image "${result.image.filename}" uploaded successfully!`, 'success');
+
+        // Reload images
+        await loadImages();
+    } catch (error) {
+        throw new Error(error.message || 'Failed to download image from URL');
+    }
 }
 
 // Show preview modal
@@ -290,8 +435,15 @@ async function uploadFileWithName(file, customName) {
 
 // Upload single file
 async function uploadSingleFile(file) {
+    const folder = document.getElementById('folder-select-upload').value;
+
+    if (!folder) {
+        throw new Error('Please select a folder first');
+    }
+
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('folder', folder);
 
     const response = await fetch('/admin/images/upload', {
         method: 'POST',
@@ -417,3 +569,226 @@ async function deleteImage(imageId) {
         showNotification('Failed to delete image: ' + error.message, 'error');
     }
 }
+
+// Setup sync database functionality
+function setupSyncDatabase() {
+    const syncBtn = document.getElementById('sync-database-btn');
+    if (syncBtn) {
+        syncBtn.addEventListener('click', openSyncModal);
+    }
+
+    const applyBtn = document.getElementById('apply-sync-btn');
+    if (applyBtn) {
+        applyBtn.addEventListener('click', applySyncChanges);
+    }
+}
+
+// Open sync modal and scan
+async function openSyncModal() {
+    const modal = document.getElementById('sync-modal');
+    const scanningDiv = document.getElementById('sync-scanning');
+    const reportDiv = document.getElementById('sync-report');
+    const applyBtn = document.getElementById('apply-sync-btn');
+
+    // Show modal and scanning state
+    modal.style.display = 'flex';
+    scanningDiv.style.display = 'block';
+    reportDiv.style.display = 'none';
+    applyBtn.style.display = 'none';
+
+    try {
+        // Scan filesystem vs database
+        const report = await apiCall('/admin/images/sync', 'GET');
+
+        // Hide scanning, show report
+        scanningDiv.style.display = 'none';
+        reportDiv.style.display = 'block';
+
+        // Generate report HTML
+        const reportHTML = generateSyncReport(report);
+        reportDiv.innerHTML = reportHTML;
+
+        // Show apply button if there are issues
+        if (report.total_issues > 0) {
+            applyBtn.style.display = 'inline-block';
+        }
+    } catch (error) {
+        scanningDiv.style.display = 'none';
+        reportDiv.style.display = 'block';
+        reportDiv.innerHTML = `
+            <div class="sync-status warning">
+                ❌ Scan Failed
+            </div>
+            <p style="color: #e74c3c; text-align: center;">
+                ${error.message || 'Failed to scan database'}
+            </p>
+        `;
+    }
+}
+
+// Close sync modal
+function closeSyncModal() {
+    document.getElementById('sync-modal').style.display = 'none';
+}
+
+// Generate sync report HTML
+function generateSyncReport(report) {
+    let html = '';
+
+    // Status header
+    if (report.total_issues === 0) {
+        html += `
+            <div class="sync-status success">
+                ✅ Everything In Sync!
+            </div>
+            <p style="text-align: center; color: #ccc; margin-bottom: 20px;">
+                ${report.in_sync_count} images and folders are properly synced with the filesystem.
+            </p>
+        `;
+        return html;
+    }
+
+    html += `
+        <div class="sync-status warning">
+            ⚠️ Issues Found: ${report.total_issues}
+        </div>
+        <p style="text-align: center; color: #ccc; margin-bottom: 20px;">
+            Found ${report.in_sync_count} in sync, ${report.total_issues} issues to fix
+        </p>
+        <div class="sync-issues">
+    `;
+
+    // Orphaned database records
+    if (report.orphaned_records.length > 0) {
+        html += `
+            <div class="issue-category">
+                <div class="issue-header">
+                    ⚠️ Orphaned Database Records
+                    <span class="issue-count">${report.orphaned_records.length}</span>
+                </div>
+                <div class="issue-description">
+                    These records exist in the database but files are missing. They will be removed.
+                </div>
+                <ul class="issue-list">
+        `;
+        report.orphaned_records.forEach(record => {
+            html += `<li>"${record.filename}" in folder "${record.folder}"</li>`;
+        });
+        html += `
+                </ul>
+            </div>
+        `;
+    }
+
+    // Orphaned files
+    if (report.orphaned_files.length > 0) {
+        html += `
+            <div class="issue-category">
+                <div class="issue-header">
+                    📁 Orphaned Files
+                    <span class="issue-count">${report.orphaned_files.length}</span>
+                </div>
+                <div class="issue-description">
+                    These files exist but are not in the database. They will be added and set to Active.
+                </div>
+                <ul class="issue-list">
+        `;
+        report.orphaned_files.forEach(file => {
+            html += `<li>"${file.filename}" in folder "${file.folder}"</li>`;
+        });
+        html += `
+                </ul>
+            </div>
+        `;
+    }
+
+    // Missing folders
+    if (report.missing_folders.length > 0) {
+        html += `
+            <div class="issue-category">
+                <div class="issue-header">
+                    🗂️ Missing Folders
+                    <span class="issue-count">${report.missing_folders.length}</span>
+                </div>
+                <div class="issue-description">
+                    These directories exist but have no folder record. Folder records will be created.
+                </div>
+                <ul class="issue-list">
+        `;
+        report.missing_folders.forEach(folder => {
+            html += `<li>"${folder.name}" (${folder.image_count} images)</li>`;
+        });
+        html += `
+                </ul>
+            </div>
+        `;
+    }
+
+    html += `
+        </div>
+        <div class="sync-note">
+            ℹ️ Note: All new images will be set to Active. No existing images will be modified.
+        </div>
+    `;
+
+    return html;
+}
+
+// Apply sync changes
+async function applySyncChanges() {
+    const applyBtn = document.getElementById('apply-sync-btn');
+    const reportDiv = document.getElementById('sync-report');
+
+    // Disable button
+    applyBtn.disabled = true;
+    applyBtn.textContent = 'Applying...';
+
+    try {
+        const result = await apiCall('/admin/images/sync', 'POST');
+
+        // Show success
+        reportDiv.innerHTML = `
+            <div class="sync-status success">
+                ✅ Sync Complete!
+            </div>
+            <p style="text-align: center; color: #ccc; margin-bottom: 20px;">
+                Database successfully synced with filesystem!
+            </p>
+            <div class="sync-issues">
+                <div style="text-align: center; padding: 20px;">
+                    <p style="color: #fff; margin-bottom: 10px;"><strong>Changes applied:</strong></p>
+                    <p style="color: #ccc;">• ${result.removed_records} orphaned records removed</p>
+                    <p style="color: #ccc;">• ${result.added_files} new images added</p>
+                    <p style="color: #ccc;">• ${result.created_folders} folder records created</p>
+                </div>
+            </div>
+            <div class="sync-note">
+                🎉 Your database is now in sync!
+            </div>
+        `;
+
+        // Hide apply button
+        applyBtn.style.display = 'none';
+
+        // Reload images and folders
+        await loadFolders();
+        await loadImages();
+
+        showNotification('Database synced successfully!', 'success');
+    } catch (error) {
+        reportDiv.innerHTML = `
+            <div class="sync-status warning">
+                ❌ Sync Failed
+            </div>
+            <p style="color: #e74c3c; text-align: center;">
+                ${error.message || 'Failed to apply changes'}
+            </p>
+        `;
+        applyBtn.disabled = false;
+        applyBtn.textContent = 'Apply Changes';
+        showNotification('Failed to sync database: ' + error.message, 'error');
+    }
+}
+
+// Make functions global for onclick handlers
+window.closeSyncModal = closeSyncModal;

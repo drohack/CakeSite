@@ -12,15 +12,39 @@ class Image(db.Model):
     __tablename__ = 'images'
 
     id = db.Column(db.Integer, primary_key=True)
-    filename = db.Column(db.String(255), nullable=False, unique=True)
+    filename = db.Column(db.String(255), nullable=False)
+    folder = db.Column(db.String(255), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('folder', 'filename', name='uix_folder_filename'),
+    )
 
     def to_dict(self):
         return {
             'id': self.id,
             'filename': self.filename,
+            'folder': self.folder,
             'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class Folder(db.Model):
+    """Stores folder metadata for organization."""
+    __tablename__ = 'folders'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False, unique=True)
+    display_name = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'display_name': self.display_name,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
@@ -125,6 +149,7 @@ class SmashPassSession(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     status = db.Column(db.String(20), default='setup', nullable=False)  # setup, active, completed
+    folder = db.Column(db.String(255), nullable=True)  # Which folder this session was created from
     current_image_index = db.Column(db.Integer, default=0)
     image_order = db.Column(db.Text)  # JSON string of randomized image IDs
     started_at = db.Column(db.DateTime)
@@ -138,6 +163,7 @@ class SmashPassSession(db.Model):
         return {
             'id': self.id,
             'status': self.status,
+            'folder': self.folder,
             'current_image_index': self.current_image_index,
             'image_order': json.loads(self.image_order) if self.image_order else [],
             'started_at': self.started_at.isoformat() if self.started_at else None,
@@ -171,19 +197,104 @@ class SmashPassVote(db.Model):
         }
 
 
+def migrate_to_default_folder(app):
+    """Move all root images to 'default' folder and clean up existing polls."""
+    import os
+    import shutil
+
+    with app.app_context():
+        # Check if migration already done (default folder exists in DB)
+        if Folder.query.filter_by(name='default').first():
+            return
+
+        # Check if there are any image files in the root images directory
+        images_dir = os.path.join(app.root_path, 'images')
+        if not os.path.exists(images_dir):
+            return
+
+        # Find image files in root directory (not in subdirectories)
+        root_image_files = []
+        for filename in os.listdir(images_dir):
+            file_path = os.path.join(images_dir, filename)
+            if os.path.isfile(file_path) and filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                root_image_files.append(filename)
+
+        # Only proceed if there are images to migrate
+        if not root_image_files:
+            return
+
+        print(f"Migrating {len(root_image_files)} images to 'default' folder...")
+
+        # End all existing polls (clean slate)
+        Poll.query.delete()
+        SmashPassSession.query.delete()
+        db.session.commit()
+
+        # Create default folder
+        default_folder = Folder(name='default', display_name='Default')
+        db.session.add(default_folder)
+        db.session.commit()
+
+        # Create default directory
+        default_dir = os.path.join(images_dir, 'default')
+        os.makedirs(default_dir, exist_ok=True)
+
+        # Move files from root to default folder
+        for filename in root_image_files:
+            old_path = os.path.join(images_dir, filename)
+            new_path = os.path.join(default_dir, filename)
+            if os.path.exists(old_path):
+                shutil.move(old_path, new_path)
+                print(f"  Moved: {filename}")
+
+        # Update any existing database records (if they exist)
+        try:
+            root_images = Image.query.filter_by(folder=None).all()
+            for image in root_images:
+                image.folder = 'default'
+            db.session.commit()
+        except Exception as e:
+            # If the column doesn't exist yet, that's okay - we'll add images in init_db
+            print(f"  Note: Could not update database records (this is normal on first run): {e}")
+
+        print("Migration complete!")
+
+
 def init_db(app):
     """Initialize the database with the Flask app."""
+    import os
+
     db.init_app(app)
     with app.app_context():
         db.create_all()
+
+        # Run migration to move existing images to default folder
+        migrate_to_default_folder(app)
+
         # Scan images folder and add any new images
-        import os
         images_dir = os.path.join(app.root_path, 'images')
         if os.path.exists(images_dir):
-            for filename in os.listdir(images_dir):
-                if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
-                    existing = Image.query.filter_by(filename=filename).first()
-                    if not existing:
-                        new_image = Image(filename=filename, is_active=True)
-                        db.session.add(new_image)
+            # Scan subdirectories (folders)
+            for item in os.listdir(images_dir):
+                item_path = os.path.join(images_dir, item)
+
+                if os.path.isdir(item_path):
+                    # This is a folder
+                    folder_name = item
+
+                    # Create folder record if it doesn't exist
+                    existing_folder = Folder.query.filter_by(name=folder_name).first()
+                    if not existing_folder:
+                        new_folder = Folder(name=folder_name, display_name=folder_name.replace('_', ' ').title())
+                        db.session.add(new_folder)
+                        db.session.commit()
+
+                    # Scan images in this folder
+                    for filename in os.listdir(item_path):
+                        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                            existing = Image.query.filter_by(filename=filename, folder=folder_name).first()
+                            if not existing:
+                                new_image = Image(filename=filename, folder=folder_name, is_active=True)
+                                db.session.add(new_image)
+
             db.session.commit()

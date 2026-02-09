@@ -33,9 +33,21 @@ Thumbs.db
 # Logs
 *.log
 
-# Images (keep README.txt but ignore actual image files)
-images/*.png
-images/*.jpg
-images/*.jpeg
-images/*.gif
-images/*.webp
+# Images (folder-based organization)
+# Keep folder structure but ignore all image files
+images/**/*.png
+images/**/*.jpg
+images/**/*.jpeg
+images/**/*.gif
+images/**/*.webp
+images/**/*.bmp
+images/**/*.svg
+
+# Ignore all folders except default
+images/*
+!images/default/
+!images/README.txt
+
+# Keep default folder but ignore images inside it
+images/default/*
+!images/default/.gitkeep

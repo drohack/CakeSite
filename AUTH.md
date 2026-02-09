@@ -10,11 +10,12 @@ All admin pages and API endpoints now require HTTP Basic Authentication.
 - `/admin` - Home page
 - `/admin/mfk` - MFK Admin panel
 - `/admin/smashpass` - Smash or Pass Admin panel
+- `/admin/folders/manage` - Folder Manager
 - `/admin/images/manage` - Image Manager (Upload/Rename/Delete)
 - `/slideshow` - Image Slideshow
 
 **Admin API Endpoints:**
-- All `/admin/*` routes
+- All `/admin/*` routes (folders, images, polls)
 - All `/smashpass/session/*` management routes
 - All `/smashpass/sessions/*` routes
 
@@ -216,8 +217,13 @@ http://your-unraid-ip:8765/admin
 # Test authentication
 curl -u admin:admin123 http://localhost:8765/admin/images
 
-# Upload image
-curl -u admin:admin123 -F "file=@photo.jpg" http://localhost:8765/admin/images/upload
+# Upload image (requires folder parameter)
+curl -u admin:admin123 -F "file=@photo.jpg" -F "folder=default" http://localhost:8765/admin/images/upload
+
+# Create folder
+curl -u admin:admin123 -X POST -H "Content-Type: application/json" \
+  -d '{"name":"test","display_name":"Test Folder"}' \
+  http://localhost:8765/admin/folders
 ```
 
 ### User Voting (No Auth):

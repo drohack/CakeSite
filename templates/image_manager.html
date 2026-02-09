@@ -10,10 +10,17 @@
             <h1>Image Manager</h1>
         </div>
         <div class="header-right">
+            <select id="folder-select-upload" class="folder-dropdown">
+                <option value="">Select folder...</option>
+            </select>
+            <button id="sync-database-btn" class="btn btn-secondary" title="Sync database with filesystem">
+                🔄 Sync Database
+            </button>
             <label for="file-upload" class="btn btn-success">
                 📁 Upload Images
                 <input type="file" id="file-upload" multiple accept="image/*" style="display: none;">
             </label>
+            <a href="/admin/folders/manage" class="btn btn-primary">Manage Folders</a>
         </div>
     </header>
 
@@ -49,6 +56,31 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closePreviewModal()">Cancel</button>
                 <button class="btn btn-success" id="confirm-upload-btn">Upload</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync Database Modal -->
+    <div id="sync-modal" class="modal" style="display: none;">
+        <div class="modal-content sync-modal">
+            <div class="modal-header">
+                <h2>🔄 Database Sync</h2>
+                <span class="close" onclick="closeSyncModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="sync-scanning" class="sync-scanning">
+                    <p>Scanning filesystem and database...</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                </div>
+                <div id="sync-report" class="sync-report" style="display: none;">
+                    <!-- Report will be inserted here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeSyncModal()">Cancel</button>
+                <button class="btn btn-success" id="apply-sync-btn" style="display: none;">Apply Changes</button>
             </div>
         </div>
     </div>
@@ -114,6 +146,22 @@
         display: flex;
         gap: 10px;
         align-items: center;
+    }
+
+    .folder-dropdown {
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid #555;
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        font-size: 0.9rem;
+        min-width: 150px;
+        cursor: pointer;
+    }
+
+    .folder-dropdown option {
+        background: #1a1a1a;
+        color: #fff;
     }
 
     .upload-info {
@@ -182,6 +230,24 @@
         gap: 20px;
     }
 
+    .no-images {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 60px 20px;
+        color: #888;
+    }
+
+    .no-images h2 {
+        color: #fff;
+        margin-bottom: 10px;
+        font-size: 1.5rem;
+    }
+
+    .no-images p {
+        color: #888;
+        font-size: 1rem;
+    }
+
     .image-card {
         position: relative;
         border-radius: 8px;
@@ -200,7 +266,8 @@
     .image-card img {
         width: 100%;
         height: 250px;
-        object-fit: cover;
+        object-fit: contain;
+        background: rgba(0, 0, 0, 0.3);
         display: block;
     }
 
@@ -399,6 +466,135 @@
         display: flex;
         justify-content: flex-end;
         gap: 10px;
+    }
+
+    /* Sync Modal Styles */
+    .sync-modal {
+        max-width: 700px;
+    }
+
+    .sync-scanning {
+        text-align: center;
+        padding: 40px 20px;
+    }
+
+    .sync-scanning p {
+        margin-bottom: 20px;
+        font-size: 1rem;
+        color: #ccc;
+    }
+
+    .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #3498db, #2ecc71);
+        animation: progress 2s ease-in-out infinite;
+    }
+
+    @keyframes progress {
+        0% { width: 0%; }
+        50% { width: 100%; }
+        100% { width: 0%; }
+    }
+
+    .sync-report {
+        padding: 20px;
+    }
+
+    .sync-status {
+        text-align: center;
+        padding: 20px;
+        margin-bottom: 20px;
+        border-radius: 8px;
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+
+    .sync-status.success {
+        background: rgba(46, 204, 113, 0.2);
+        color: #2ecc71;
+        border: 1px solid #2ecc71;
+    }
+
+    .sync-status.warning {
+        background: rgba(241, 196, 15, 0.2);
+        color: #f1c40f;
+        border: 1px solid #f1c40f;
+    }
+
+    .sync-issues {
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    .issue-category {
+        margin-bottom: 20px;
+    }
+
+    .issue-category:last-child {
+        margin-bottom: 0;
+    }
+
+    .issue-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #fff;
+    }
+
+    .issue-count {
+        background: rgba(52, 152, 219, 0.3);
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.875rem;
+    }
+
+    .issue-description {
+        color: #888;
+        font-size: 0.875rem;
+        margin-bottom: 10px;
+    }
+
+    .issue-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .issue-list li {
+        padding: 8px 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border-left: 3px solid #3498db;
+        margin-bottom: 5px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 0.875rem;
+    }
+
+    .issue-list li:last-child {
+        margin-bottom: 0;
+    }
+
+    .sync-note {
+        margin-top: 15px;
+        padding: 12px;
+        background: rgba(52, 152, 219, 0.1);
+        border-left: 3px solid #3498db;
+        border-radius: 4px;
+        font-size: 0.875rem;
+        color: #ccc;
     }
 
     @media (max-width: 768px) {

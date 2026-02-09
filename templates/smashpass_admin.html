@@ -14,6 +14,9 @@
             <button class="tab-btn" data-tab="results">Results</button>
         </div>
         <div class="header-right">
+            <select id="folder-select" class="folder-dropdown">
+                <option value="all">All Folders</option>
+            </select>
             <button id="create-session" class="btn btn-success">Create Session</button>
             <button id="next-image" class="btn btn-primary" disabled>Next →</button>
             <button id="end-session" class="btn btn-danger" disabled>End Session</button>
@@ -194,6 +197,22 @@
         gap: 10px;
         align-items: center;
         justify-content: flex-end;
+    }
+
+    .folder-dropdown {
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid #555;
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        font-size: 0.9rem;
+        min-width: 150px;
+        cursor: pointer;
+    }
+
+    .folder-dropdown option {
+        background: #1a1a1a;
+        color: #fff;
     }
 
     .tab-btn {
@@ -534,7 +553,8 @@
     .result-card img {
         width: 100%;
         height: 180px;
-        object-fit: cover;
+        object-fit: contain;
+        background: rgba(0, 0, 0, 0.3);
         border-radius: 8px;
         margin-bottom: 10px;
     }

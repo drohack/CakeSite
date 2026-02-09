@@ -30,6 +30,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Auto-load QR code
     loadQRCode();
 
+    // Load folders dropdown
+    loadFolders();
+
+    // Setup folder filter
+    setupFolderFilter();
+
     // Setup button handlers
     setupButtonHandlers();
 
@@ -86,27 +92,69 @@ function setupTabs() {
     }
 }
 
+// Switch to results tab and load specific poll
+function switchToResultsTab(pollId) {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    // Find and activate results tab
+    const resultsButton = document.querySelector('[data-tab="results"]');
+    if (resultsButton) {
+        // Remove active from all
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        tabContents.forEach(content => content.classList.remove('active'));
+
+        // Activate results tab
+        resultsButton.classList.add('active');
+        document.getElementById('results-tab').classList.add('active');
+
+        // Load polls dropdown and select this poll
+        loadPollsDropdown().then(() => {
+            const pollSelect = document.getElementById('poll-select');
+            if (pollSelect) {
+                pollSelect.value = pollId;
+                loadPollResults(pollId);
+            }
+        });
+    }
+}
+
+// Store all images
+let allImages = [];
+
 // Load all images
 async function loadImages() {
     try {
-        const images = await apiCall('/admin/images');
-        displayImages(images);
+        allImages = await apiCall('/admin/images');
+        displayImages();
     } catch (error) {
         showNotificationCenter('Failed to load images: ' + error.message, 'error');
     }
 }
 
-// Display images in grid
-function displayImages(images) {
+// Display images in grid (filtered by selected folder)
+function displayImages() {
     const grid = document.getElementById('images-grid');
     grid.innerHTML = '';
 
-    if (images.length === 0) {
-        grid.innerHTML = '<p>No images found. Add images to the images/ folder.</p>';
+    // Get selected folder
+    const folderSelect = document.getElementById('folder-select');
+    const selectedFolder = folderSelect ? folderSelect.value : 'all';
+
+    // Filter images by folder
+    const filteredImages = selectedFolder === 'all'
+        ? allImages
+        : allImages.filter(img => img.folder === selectedFolder);
+
+    if (filteredImages.length === 0) {
+        const message = selectedFolder === 'all'
+            ? '<p>No images found. Add images to the images/ folder.</p>'
+            : '<p>No images in this folder.</p>';
+        grid.innerHTML = message;
         return;
     }
 
-    images.forEach(image => {
+    filteredImages.forEach(image => {
         const card = document.createElement('div');
         card.className = 'image-card';
         card.innerHTML = `
@@ -185,9 +233,23 @@ async function loadSPSessionsDropdown() {
     try {
         const sessions = await apiCall('/smashpass/sessions/all');
         const select = document.getElementById('sp-session-load');
+        const folderSelect = document.getElementById('folder-select');
+        const selectedFolder = folderSelect ? folderSelect.value : 'all';
+
+        // Filter sessions by folder
+        const filteredSessions = sessions.filter(session => {
+            if (selectedFolder === 'all') {
+                // Show sessions that were created with "all" folders or no folder specified
+                return !session.folder || session.folder === null;
+            } else {
+                // Show sessions for this specific folder
+                return session.folder === selectedFolder;
+            }
+        });
+
         select.innerHTML = '<option value="">Select session...</option>';
 
-        sessions.forEach(session => {
+        filteredSessions.forEach(session => {
             const option = document.createElement('option');
             option.value = session.id;
             const status = session.status.charAt(0).toUpperCase() + session.status.slice(1);
@@ -195,6 +257,10 @@ async function loadSPSessionsDropdown() {
             option.textContent = `Session #${session.id} - ${status} - ${date}`;
             select.appendChild(option);
         });
+
+        if (filteredSessions.length === 0) {
+            select.innerHTML = '<option value="">No sessions for this folder</option>';
+        }
     } catch (error) {
         console.error('Failed to load S/P sessions:', error);
     }
@@ -268,12 +334,42 @@ async function loadQRCode() {
     }
 }
 
+// Load folders and populate dropdown
+async function loadFolders() {
+    try {
+        const folders = await apiCall('/admin/folders');
+        const select = document.getElementById('folder-select');
+        select.innerHTML = '<option value="all">All Folders</option>';
+
+        folders.forEach(folder => {
+            const option = document.createElement('option');
+            option.value = folder.name;
+            option.textContent = `${folder.display_name} (${folder.image_count})`;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Failed to load folders:', error);
+    }
+}
+
+// Setup folder filter change handler
+function setupFolderFilter() {
+    const folderSelect = document.getElementById('folder-select');
+    if (folderSelect) {
+        folderSelect.addEventListener('change', () => {
+            displayImages(); // Re-filter and display
+            loadSPSessionsDropdown(); // Reload S/P sessions for this folder
+        });
+    }
+}
+
 // Setup button handlers
 function setupButtonHandlers() {
     // Create Poll (auto-starts)
     document.getElementById('create-poll').addEventListener('click', async () => {
         try {
-            const result = await apiCall('/admin/poll/create', 'POST');
+            const folder = document.getElementById('folder-select').value;
+            const result = await apiCall('/admin/poll/create', 'POST', { folder });
             currentPoll = result.poll;
             currentPollId = result.poll.id;
 
@@ -322,6 +418,9 @@ function setupButtonHandlers() {
             showNotificationCenter('Poll ended', 'success');
             updatePollStatus();
             updateButtonStates();
+
+            // Auto-switch to results tab
+            switchToResultsTab(currentPollId);
         } catch (error) {
             showNotificationCenter('Failed to end poll: ' + error.message, 'error');
         }

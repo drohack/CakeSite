@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+
+{% block title %}Folder Manager - FMK Quiz{% endblock %}
+
+{% block content %}
+<div class="folder-manager-page">
+    <header class="admin-header">
+        <div class="header-left">
+            <a href="/admin" class="btn btn-secondary btn-sm">Home</a>
+            <h1>Folder Manager</h1>
+        </div>
+        <div class="header-right">
+            <button id="create-folder-btn" class="btn btn-success">Create Folder</button>
+        </div>
+    </header>
+
+    <div class="content">
+        <div class="folders-list" id="folders-list">
+            <!-- Folders will be loaded here -->
+        </div>
+    </div>
+
+    <!-- Create Folder Modal -->
+    <div id="create-folder-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Folder</h2>
+                <span class="close" onclick="closeCreateFolderModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="folder-name-input">Folder Name:</label>
+                    <input type="text" id="folder-name-input" class="modal-input" placeholder="e.g., characters, landscapes">
+                    <p class="input-hint">Use only letters, numbers, underscores, and hyphens</p>
+                </div>
+                <div class="form-group">
+                    <label for="folder-display-name-input">Display Name:</label>
+                    <input type="text" id="folder-display-name-input" class="modal-input" placeholder="e.g., Characters, Landscapes">
+                    <p class="input-hint">Human-readable name shown in dropdowns</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeCreateFolderModal()">Cancel</button>
+                <button class="btn btn-success" id="confirm-create-folder-btn">Create</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/folder_manager.js') }}"></script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Override container from base template */
+    html, body {
+        background: #000 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        height: 100%;
+    }
+
+    .container {
+        max-width: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        min-height: 100vh;
+    }
+
+    .folder-manager-page {
+        background: #000;
+        color: #fff;
+        padding: 0;
+        min-height: 100vh;
+        width: 100%;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .admin-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 15px;
+        background: rgba(0, 0, 0, 0.9);
+        border-bottom: 1px solid #333;
+        flex-shrink: 0;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .header-left h1 {
+        margin: 0;
+        font-size: 1.5rem;
+        color: #fff;
+    }
+
+    .header-right {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 40px;
+    }
+
+    .folders-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .folder-card {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 20px;
+        transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+        cursor: pointer;
+    }
+
+    .folder-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+        background: rgba(52, 152, 219, 0.1);
+        border-color: rgba(52, 152, 219, 0.3);
+    }
+
+    .folder-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        margin-bottom: 15px;
+    }
+
+    .folder-info {
+        flex: 1;
+    }
+
+    .folder-name {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #fff;
+        margin-bottom: 5px;
+    }
+
+    .folder-technical-name {
+        font-size: 0.875rem;
+        color: #888;
+        font-family: monospace;
+    }
+
+    .folder-stats {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 15px;
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 6px;
+    }
+
+    .stat-item {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        color: #888;
+        text-transform: uppercase;
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #3498db;
+    }
+
+    .folder-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .folder-actions {
+        margin-top: 15px;
+    }
+
+    .folder-actions .btn {
+        padding: 8px 12px;
+        font-size: 0.875rem;
+        margin-right: 5px;
+    }
+
+    .folder-actions .btn:last-child {
+        margin-right: 0;
+    }
+
+    .no-folders {
+        text-align: center;
+        padding: 60px;
+        color: #888;
+    }
+
+    .no-folders h2 {
+        color: #fff;
+        margin-bottom: 10px;
+    }
+
+    /* Modal styles */
+    .modal {
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-content {
+        background-color: #1a1a1a;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 500px;
+        border: 1px solid #333;
+        animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+        from {
+            transform: translateY(-50px);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px;
+        border-bottom: 1px solid #333;
+    }
+
+    .modal-header h2 {
+        margin: 0;
+        color: #fff;
+        font-size: 1.5rem;
+    }
+
+    .close {
+        color: #ccc;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        line-height: 1;
+    }
+
+    .close:hover {
+        color: #fff;
+    }
+
+    .modal-body {
+        padding: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        color: #fff;
+        margin-bottom: 8px;
+    }
+
+    .modal-input {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #555;
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.5);
+        color: #fff;
+        font-size: 1rem;
+        box-sizing: border-box;
+    }
+
+    .modal-input:focus {
+        outline: none;
+        border-color: #3498db;
+    }
+
+    .input-hint {
+        font-size: 0.875rem;
+        color: #888;
+        margin: 5px 0 0 0;
+    }
+
+    .modal-footer {
+        padding: 20px;
+        border-top: 1px solid #333;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    @media (max-width: 768px) {
+        .folders-list {
+            grid-template-columns: 1fr;
+            padding: 20px;
+        }
+
+        .modal-content {
+            width: 100%;
+            height: 100%;
+            max-width: none;
+            border-radius: 0;
+        }
+    }
+</style>
+{% endblock %}
