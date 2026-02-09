@@ -40,6 +40,7 @@ auth = HTTPBasicAuth()
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')  # Default password for development
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+MAX_IMAGE_DIMENSION = 1920  # Max width or height in pixels (for 1080p displays)
 
 
 @auth.verify_password
@@ -77,6 +78,50 @@ def safe_filename(filename):
         filename = 'unnamed'
 
     return filename
+
+
+def resize_image_if_needed(image_data):
+    """
+    Resize image if it exceeds MAX_IMAGE_DIMENSION on either side.
+    Returns bytes of the resized image (or original if no resize needed).
+    """
+    from io import BytesIO
+
+    img = PILImage.open(BytesIO(image_data) if isinstance(image_data, bytes) else image_data)
+    width, height = img.size
+
+    # Check if resize needed
+    if width <= MAX_IMAGE_DIMENSION and height <= MAX_IMAGE_DIMENSION:
+        # No resize needed
+        if isinstance(image_data, bytes):
+            return image_data
+        else:
+            # Convert file to bytes
+            image_data.seek(0)
+            return image_data.read()
+
+    # Calculate new dimensions (maintain aspect ratio)
+    if width > height:
+        new_width = MAX_IMAGE_DIMENSION
+        new_height = int(height * (MAX_IMAGE_DIMENSION / width))
+    else:
+        new_height = MAX_IMAGE_DIMENSION
+        new_width = int(width * (MAX_IMAGE_DIMENSION / height))
+
+    # Resize image
+    img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
+
+    # Convert to bytes
+    output = BytesIO()
+    # Preserve format, or use PNG if unknown
+    format = img.format or 'PNG'
+    # For JPEG, use quality setting
+    if format.upper() in ['JPEG', 'JPG']:
+        img.convert('RGB').save(output, format='JPEG', quality=90, optimize=True)
+    else:
+        img.save(output, format=format, optimize=True)
+
+    return output.getvalue()
 
 
 # ============================================================================
@@ -341,6 +386,57 @@ def toggle_image(image_id):
     return jsonify(image.to_dict())
 
 
+@app.route('/admin/images/proxy-url', methods=['POST'])
+@auth.login_required
+def proxy_image_url():
+    """Download image from URL and return it (for preview, doesn't save)."""
+    import requests
+    from io import BytesIO
+    from flask import send_file
+
+    data = request.json
+    url = data.get('url')
+
+    if not url:
+        return jsonify({'error': 'URL is required'}), 400
+
+    try:
+        # Download image from URL
+        response = requests.get(url, timeout=15, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        response.raise_for_status()
+
+        # Check content type
+        content_type = response.headers.get('content-type', '')
+        if not content_type.startswith('image/'):
+            return jsonify({'error': f'URL returned {content_type}, not an image'}), 400
+
+        # Validate it's actually an image
+        try:
+            img = PILImage.open(BytesIO(response.content))
+            img.verify()
+        except Exception as e:
+            return jsonify({'error': f'Invalid image file: {str(e)}'}), 400
+
+        # Resize if needed
+        resized_image_data = resize_image_if_needed(response.content)
+
+        # Return image data as file
+        return send_file(
+            BytesIO(resized_image_data),
+            mimetype=content_type,
+            as_attachment=False
+        )
+
+    except requests.Timeout:
+        return jsonify({'error': 'Download timed out (15s limit)'}), 400
+    except requests.RequestException as e:
+        return jsonify({'error': f'Failed to download: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': f'Failed to process: {str(e)}'}), 500
+
+
 @app.route('/admin/images/upload-from-url', methods=['POST'])
 @auth.login_required
 def upload_image_from_url():
@@ -364,19 +460,32 @@ def upload_image_from_url():
 
     try:
         # Download image from URL
-        response = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
-        response.raise_for_status()
+        try:
+            response = requests.get(url, timeout=15, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            })
+            response.raise_for_status()
+        except requests.Timeout:
+            return jsonify({'error': 'Download timed out (15s limit). Image may be too large or server too slow.'}), 400
+        except requests.RequestException as e:
+            return jsonify({'error': f'Failed to download image: {str(e)}'}), 400
 
         # Check content type
         content_type = response.headers.get('content-type', '')
         if not content_type.startswith('image/'):
-            return jsonify({'error': 'URL does not point to an image'}), 400
+            return jsonify({'error': f'URL returned {content_type}, not an image. Make sure URL points directly to an image file.'}), 400
+
+        # Check size
+        if len(response.content) > MAX_FILE_SIZE:
+            return jsonify({'error': f'Image too large ({len(response.content) / 1024 / 1024:.1f}MB). Max: {MAX_FILE_SIZE / 1024 / 1024}MB'}), 400
 
         # Get filename from URL
         filename = url.split('/')[-1].split('?')[0]  # Remove query params
         if not filename or '.' not in filename:
             # Generate filename based on content type
             ext = content_type.split('/')[-1]
+            if ext == 'jpeg':
+                ext = 'jpg'
             filename = f'image.{ext}'
 
         # Sanitize filename
@@ -390,16 +499,20 @@ def upload_image_from_url():
         # Validate it's actually an image
         try:
             img = PILImage.open(BytesIO(response.content))
+            original_size = img.size
             img.verify()
-        except Exception:
-            return jsonify({'error': 'Invalid image file'}), 400
+        except Exception as e:
+            return jsonify({'error': f'Invalid or corrupted image file: {str(e)}'}), 400
+
+        # Resize if needed
+        resized_image_data = resize_image_if_needed(response.content)
 
         # Save to folder
         folder_path = os.path.join(app.root_path, 'images', folder)
         file_path = os.path.join(folder_path, filename)
 
         with open(file_path, 'wb') as f:
-            f.write(response.content)
+            f.write(resized_image_data)
 
         # Add to database
         new_image = Image(filename=filename, folder=folder, is_active=True)
@@ -408,12 +521,14 @@ def upload_image_from_url():
 
         return jsonify({
             'success': True,
-            'image': new_image.to_dict()
+            'image': new_image.to_dict(),
+            'resized': len(resized_image_data) != len(response.content),
+            'original_size': original_size
         })
 
-    except requests.RequestException as e:
-        return jsonify({'error': f'Failed to download image: {str(e)}'}), 400
     except Exception as e:
+        import traceback
+        print(f"URL upload error: {traceback.format_exc()}")
         return jsonify({'error': f'Failed to process image: {str(e)}'}), 500
 
 
@@ -448,9 +563,11 @@ def upload_image():
     if file_size > MAX_FILE_SIZE:
         return jsonify({'error': f'File too large. Max size: {MAX_FILE_SIZE / 1024 / 1024}MB'}), 400
 
-    # Validate it's actually an image
+    # Validate it's actually an image and get dimensions
     try:
+        file.seek(0)
         img = PILImage.open(file)
+        original_size = img.size
         img.verify()
         file.seek(0)  # Reset after verify
     except Exception:
@@ -464,19 +581,33 @@ def upload_image():
     if existing:
         return jsonify({'error': f'Image with filename "{filename}" already exists in this folder'}), 400
 
+    # Resize if needed
+    file.seek(0)
+    resized_image_data = resize_image_if_needed(file)
+    was_resized = len(resized_image_data) != file_size
+
     # Save to folder
     folder_path = os.path.join(app.root_path, 'images', folder)
     file_path = os.path.join(folder_path, filename)
-    file.save(file_path)
+
+    with open(file_path, 'wb') as f:
+        f.write(resized_image_data)
 
     # Add to database
     new_image = Image(filename=filename, folder=folder, is_active=True)
     db.session.add(new_image)
     db.session.commit()
 
+    # Get final image info
+    final_img = PILImage.open(file_path)
+    final_size = final_img.size
+
     return jsonify({
         'success': True,
-        'image': new_image.to_dict()
+        'image': new_image.to_dict(),
+        'resized': was_resized,
+        'original_size': original_size,
+        'final_size': final_size
     })
 
 

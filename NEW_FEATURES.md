@@ -14,15 +14,18 @@ Organize your images into folders for better management and themed polls!
 - **Multiple Folders**: Organize images by theme, event, or category (e.g., "Characters", "Landscapes", "Party2024")
 - **Folder Manager**: Web UI to create and manage folders
 - **Selective Polls**: Create MFK polls or S/P sessions from specific folders or all folders
-- **Easy Uploads**: Upload images directly to specific folders
+- **Advanced Upload System**: Multiple upload methods with auto-resize and preview
+- **Smart Folder Memory**: Remembers your last selected folder across sessions
 
 ### Key Features
 
 ✅ **Folder Management UI**: Create and delete folders via `/admin/folders/manage`
 ✅ **Organized Storage**: `images/default/`, `images/characters/`, etc.
 ✅ **Selective Polling**: Choose specific folder or "All Folders" when creating polls
-✅ **Easy Uploads**: Select folder before uploading images
+✅ **Advanced Upload System**: Multiple methods with auto-resize and preview
+✅ **Smart Folder Memory**: Remembers your last selected folder
 ✅ **Auto-Migration**: Existing images automatically moved to "default" folder on first run
+✅ **Database Sync Tool**: Detect and fix filesystem/database inconsistencies
 
 ### How to Use
 
@@ -38,9 +41,18 @@ Organize your images into folders for better management and themed polls!
 #### 2. Upload Images to Folders
 **URL**: http://localhost:5000/admin/images/manage
 
-- Select folder from dropdown
-- Upload images (drag & drop or click)
-- Images are saved to the selected folder
+**Multiple Upload Methods:**
+- **File Browser**: Click "Upload Images" → Select multiple files → Direct upload
+- **Drag & Drop**: Drag multiple files onto page → Direct upload
+- **Clipboard Paste**: Copy image files from desktop → Ctrl+V → Direct upload (multiple supported!)
+- **URL Paste**: Copy image URL → Ctrl+V → Preview & rename → Upload
+- **Single File Preview**: Any single file shows preview modal for renaming
+
+**Smart Features:**
+- Auto-resize images >1920px (perfect for 1080p displays)
+- Folder memory (remembers last selected folder)
+- Toast notifications for all operations
+- Spaces and parentheses allowed in filenames
 
 #### 3. Create Polls from Specific Folders
 **MFK Admin** (http://localhost:5000/admin/mfk):

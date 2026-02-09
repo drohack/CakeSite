@@ -88,8 +88,14 @@ This guide will get you up and running in under 5 minutes.
    - Organize image sets
 
 2. **Upload Images** at `http://localhost:5000/admin/images/manage`:
-   - Select folder from dropdown
-   - Upload images or paste URLs (Ctrl+V)
+   - Folder auto-selected (remembers last choice)
+   - **Multiple upload methods**:
+     - File browser (select multiple files)
+     - Drag & drop (multiple files supported)
+     - Clipboard paste (Ctrl+V - supports multiple files!)
+     - URL paste (Ctrl+V - shows preview & rename)
+   - Large images auto-resized to 1920px max
+   - Single files show preview modal for renaming
 
 3. **Go to MFK Admin** at `http://localhost:5000/admin/mfk`:
    - **Manage Images tab**:

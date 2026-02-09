@@ -6,6 +6,7 @@ A full-featured interactive polling web application for playing "Marry, F, Kill"
 
 - **Folder-Based Organization**: Organize images into folders by theme, event, or category
 - **Selective Polling**: Create polls from specific folders or all folders combined
+- **Advanced Image Upload**: Multi-file support via browser/drag/paste, URL paste, auto-resize, preview & rename
 - **Image Management**: Upload, rename, delete images, and toggle their availability for polls
 - **Admin Control Panel**: Full control over poll creation, execution, and results
 - **Real-time Updates**: Live results using WebSockets
@@ -293,12 +294,17 @@ docker run -p 8080:5000 fmk-quiz
 
 **Via UI (Recommended)**:
 1. Navigate to `/admin/folders/manage` to create folders
-2. Go to `/admin/images/manage` to upload images to specific folders
+2. Go to `/admin/images/manage` to upload images:
+   - **Single/Multiple files**: Click "Upload Images" or drag & drop
+   - **From clipboard**: Copy image files → Ctrl+V (supports multiple!)
+   - **From URL**: Copy image URL → Ctrl+V → Preview & rename
+   - **Auto-resize**: Large images (>1920px) automatically optimized
 
 **Via Filesystem**:
 1. Create folders in `images/` directory (e.g., `images/party2024/`)
 2. Add image files to the folders
 3. Restart the container - new images will be automatically detected
+4. Use "Sync Database" button to add them to database
 
 ### Styling
 

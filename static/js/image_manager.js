@@ -22,7 +22,7 @@ async function loadFolders() {
     try {
         const folders = await apiCall('/admin/folders');
         const select = document.getElementById('folder-select-upload');
-        select.innerHTML = '<option value="">Select folder...</option>';
+        select.innerHTML = '';
 
         folders.forEach(folder => {
             const option = document.createElement('option');
@@ -31,14 +31,30 @@ async function loadFolders() {
             select.appendChild(option);
         });
 
-        // Check if folder parameter in URL
+        // Priority: URL param > Last selected (localStorage) > 'default' folder > First folder
         const urlParams = new URLSearchParams(window.location.search);
         const folderParam = urlParams.get('folder');
+        const lastSelectedFolder = localStorage.getItem('lastSelectedFolder');
+
         if (folderParam) {
+            // URL parameter takes priority
             select.value = folderParam;
-            // Trigger filter update
-            displayImages();
+        } else if (lastSelectedFolder && folders.find(f => f.name === lastSelectedFolder)) {
+            // Use last selected folder if it still exists
+            select.value = lastSelectedFolder;
+        } else {
+            // Fall back to 'default' folder if it exists
+            const defaultFolder = folders.find(f => f.name === 'default');
+            if (defaultFolder) {
+                select.value = 'default';
+            } else if (folders.length > 0) {
+                // Or select first folder if no default
+                select.value = folders[0].name;
+            }
         }
+
+        // Trigger filter update
+        displayImages();
     } catch (error) {
         console.error('Failed to load folders:', error);
         showNotification('Failed to load folders: ' + error.message, 'error');
@@ -86,6 +102,8 @@ function displayImages() {
 function setupFolderFilter() {
     const select = document.getElementById('folder-select-upload');
     select.addEventListener('change', () => {
+        // Save selected folder to localStorage
+        localStorage.setItem('lastSelectedFolder', select.value);
         displayImages();
     });
 }
@@ -188,9 +206,32 @@ function setupDragAndDrop() {
 // Setup clipboard paste
 function setupClipboardPaste() {
     document.addEventListener('paste', async (e) => {
+        // Check for files first (supports multiple file copy from desktop)
+        const files = e.clipboardData.files;
+        if (files && files.length > 0) {
+            e.preventDefault();
+
+            // Filter for image files only
+            const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+
+            if (imageFiles.length === 0) {
+                return; // No image files
+            }
+
+            if (imageFiles.length === 1) {
+                // Single file - show preview modal
+                showPreviewModal(imageFiles[0]);
+            } else {
+                // Multiple files - upload directly
+                await uploadMultipleFiles(imageFiles);
+            }
+            return;
+        }
+
+        // Fall back to checking items (for in-browser copy/paste)
         const items = e.clipboardData.items;
 
-        // First check for actual image data
+        // Check for actual image data
         for (const item of items) {
             if (item.type.indexOf('image') !== -1) {
                 const file = item.getAsFile();
@@ -240,7 +281,7 @@ async function handleImageURL(url) {
 
         // Try client-side fetch first
         try {
-            const response = await fetch(url);
+            const response = await fetch(url, { mode: 'cors' });
             if (response.ok) {
                 const blob = await response.blob();
 
@@ -248,53 +289,65 @@ async function handleImageURL(url) {
                 if (blob.type.startsWith('image/')) {
                     // Extract filename from URL
                     const urlPath = new URL(url).pathname;
-                    const filename = urlPath.split('/').pop() || 'image.png';
+                    const filename = urlPath.split('/').pop().split('?')[0] || 'image.png';
 
                     // Convert blob to file
                     const file = new File([blob], filename, { type: blob.type });
 
-                    // Show preview modal
+                    // Show preview modal for renaming
                     showPreviewModal(file);
-                    showNotification('Image loaded from URL', 'success');
+                    showNotification('Image loaded - you can rename it before uploading', 'success');
                     return;
                 }
             }
         } catch (fetchError) {
-            // CORS or network error - try server-side download
-            console.log('Client-side fetch failed, trying server-side:', fetchError);
+            // CORS or network error - use server-side download with preview
+            console.log('Client-side fetch failed, using server-side download:', fetchError);
         }
 
-        // Fallback: use server-side download (bypasses CORS)
+        // Fallback: server-side download, then show preview
         await handleImageURLServerSide(url);
 
     } catch (error) {
         console.error('Failed to load image from URL:', error);
-        showNotification('Failed to load image from URL: ' + error.message, 'error');
+        const errorMsg = error.message || 'Failed to load image from URL';
+        alert('URL Upload Failed:\n\n' + errorMsg + '\n\nURL: ' + url);
+        showNotification('Failed to load image from URL: ' + errorMsg, 'error');
     }
 }
 
-// Handle image URL via server-side download (CORS bypass)
+// Handle image URL via server-side download, then show preview
 async function handleImageURLServerSide(url) {
-    const folder = document.getElementById('folder-select-upload').value;
-
-    if (!folder) {
-        showNotification('Please select a folder first', 'error');
-        return;
-    }
-
     try {
-        // Download via server
-        const result = await apiCall('/admin/images/upload-from-url', 'POST', {
-            url: url,
-            folder: folder
+        // Use a special endpoint to download and return the image
+        const response = await fetch('/admin/images/proxy-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: url })
         });
 
-        showNotification(`Image "${result.image.filename}" uploaded successfully!`, 'success');
+        if (!response.ok) {
+            const result = await response.json();
+            throw new Error(result.error || 'Failed to download image');
+        }
 
-        // Reload images
-        await loadImages();
+        // Get the image as blob
+        const blob = await response.blob();
+
+        // Extract filename from URL
+        const urlPath = new URL(url).pathname;
+        const filename = urlPath.split('/').pop().split('?')[0] || 'image.png';
+
+        // Convert blob to file
+        const file = new File([blob], filename, { type: blob.type });
+
+        // Show preview modal for renaming
+        showPreviewModal(file);
+        showNotification('Image downloaded - you can rename it before uploading', 'success');
+
     } catch (error) {
-        throw new Error(error.message || 'Failed to download image from URL');
+        console.error('Server-side download error:', error);
+        throw error;
     }
 }
 
@@ -368,7 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Upload multiple files directly
 async function uploadMultipleFiles(files) {
-    showUploadStatus('Uploading images...', 'info');
+    showNotification(`Uploading ${files.length} images...`, 'info');
     document.getElementById('images-grid').classList.add('uploading');
 
     let successCount = 0;
@@ -382,28 +435,25 @@ async function uploadMultipleFiles(files) {
         } catch (error) {
             failCount++;
             errors.push(`${file.name}: ${error.message}`);
+            console.error(`Upload failed for ${file.name}:`, error);
         }
     }
 
-    // Show results
+    document.getElementById('images-grid').classList.remove('uploading');
+
+    // Show results as toast
     if (failCount === 0) {
-        showUploadStatus(`Successfully uploaded ${successCount} image(s)`, 'success');
+        showNotification(`✅ Successfully uploaded ${successCount} image(s)!`, 'success');
     } else {
-        showUploadStatus(
-            `Uploaded ${successCount}, Failed ${failCount}. Errors: ${errors.join(', ')}`,
+        showNotification(
+            `Uploaded ${successCount}, Failed ${failCount}. Check console for details.`,
             'error'
         );
+        console.error('Upload errors:', errors);
     }
 
     // Reload images
     await loadImages();
-
-    document.getElementById('images-grid').classList.remove('uploading');
-
-    // Hide status after 5 seconds
-    setTimeout(() => {
-        document.getElementById('upload-status').style.display = 'none';
-    }, 5000);
 }
 
 // Upload file with custom name
@@ -420,16 +470,13 @@ async function uploadFileWithName(file, customName) {
 
         await uploadSingleFile(renamedFile);
 
-        showUploadStatus(`Successfully uploaded "${newFileName}"`, 'success');
+        showNotification(`Successfully uploaded "${newFileName}"`, 'success');
 
         // Reload images
         await loadImages();
-
-        setTimeout(() => {
-            document.getElementById('upload-status').style.display = 'none';
-        }, 3000);
     } catch (error) {
-        showUploadStatus(`Failed to upload: ${error.message}`, 'error');
+        showNotification(`Failed to upload: ${error.message}`, 'error');
+        console.error('Upload error:', error);
     }
 }
 
