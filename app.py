@@ -1,17 +1,23 @@
 """
 Main Flask application for the Marry, F, Kill Quiz.
 """
-# Fix Eventlet DNS resolution issues (must be before other imports)
-import eventlet
-eventlet.monkey_patch()
-# Configure Eventlet to use standard library DNS instead of green DNS
-import eventlet.support.greendns
-eventlet.support.greendns.resolve = lambda *args, **kwargs: __import__('socket').getaddrinfo(*args, **kwargs)
-
 import os
 import random
 import uuid
 from datetime import datetime
+import logging
+import socket
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Force urllib3 to use IPv4 only (fixes DNS issues in some Docker environments)
+import urllib3
+urllib3.util.connection.HAS_IPV6 = False
 from flask import Flask, render_template, request, jsonify, send_from_directory, session
 from flask_socketio import SocketIO, emit, join_room
 from flask_httpauth import HTTPBasicAuth
@@ -408,15 +414,37 @@ def proxy_image_url():
     data = request.json
     url = data.get('url')
 
+    logger.info(f"[PROXY-URL] Request to download: {url}")
+
     if not url:
+        logger.error("[PROXY-URL] No URL provided")
         return jsonify({'error': 'URL is required'}), 400
 
     try:
-        # Download image from URL
-        response = requests.get(url, timeout=30, headers={
+        # Pre-resolve DNS using socket (works in Docker) then use IP with requests
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+
+        logger.info(f"[PROXY-URL] Resolving DNS for {hostname}")
+        try:
+            ip_address = socket.gethostbyname(hostname)
+            logger.info(f"[PROXY-URL] Resolved {hostname} to {ip_address}")
+        except socket.gaierror as e:
+            logger.error(f"[PROXY-URL] DNS resolution failed: {e}")
+            return jsonify({'error': f'Could not resolve domain: {hostname}'}), 400
+
+        # Build URL with IP but keep Host header
+        url_with_ip = url.replace(hostname, ip_address)
+
+        logger.info(f"[PROXY-URL] Downloading from {url_with_ip}")
+        response = requests.get(url_with_ip, timeout=30, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'image/*,*/*'
-        }, allow_redirects=True)
+            'Accept': 'image/*,*/*',
+            'Host': hostname  # Important: keep original hostname for virtual hosts
+        }, allow_redirects=True, verify=True)
+
+        logger.info(f"[PROXY-URL] Download complete. Status: {response.status_code}, Size: {len(response.content)} bytes")
         response.raise_for_status()
 
         # Check content type
@@ -441,11 +469,16 @@ def proxy_image_url():
             as_attachment=False
         )
 
-    except requests.Timeout:
-        return jsonify({'error': 'Download timed out (15s limit)'}), 400
+    except requests.Timeout as e:
+        logger.error(f"[PROXY-URL] Timeout downloading from {url}: {e}")
+        return jsonify({'error': 'Download timed out (30s limit)'}), 400
     except requests.RequestException as e:
+        logger.error(f"[PROXY-URL] Request error downloading from {url}: {type(e).__name__}: {e}")
         return jsonify({'error': f'Failed to download: {str(e)}'}), 400
     except Exception as e:
+        logger.error(f"[PROXY-URL] Unexpected error downloading from {url}: {type(e).__name__}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': f'Failed to process: {str(e)}'}), 500
 
 
