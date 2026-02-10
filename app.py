@@ -465,12 +465,13 @@ def upload_image_from_url():
     try:
         # Download image from URL
         try:
-            response = requests.get(url, timeout=15, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            })
+            response = requests.get(url, timeout=30, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'image/*,*/*'
+            }, allow_redirects=True)
             response.raise_for_status()
         except requests.Timeout:
-            return jsonify({'error': 'Download timed out (15s limit). Image may be too large or server too slow.'}), 400
+            return jsonify({'error': 'Download timed out (30s limit). Server is not responding.'}), 400
         except requests.RequestException as e:
             return jsonify({'error': f'Failed to download image: {str(e)}'}), 400
 
