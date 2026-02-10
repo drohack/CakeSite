@@ -406,9 +406,10 @@ def proxy_image_url():
 
     try:
         # Download image from URL
-        response = requests.get(url, timeout=15, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
+        response = requests.get(url, timeout=30, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'image/*,*/*'
+        }, allow_redirects=True)
         response.raise_for_status()
 
         # Check content type
