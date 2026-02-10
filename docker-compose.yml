@@ -16,6 +16,12 @@ services:
       - SECRET_KEY=change-this-secret-key-in-production
       # Admin password for HTTP Basic Auth (default: admin123)
       - ADMIN_PASSWORD=admin123
+    dns:
+      # Google DNS (reliable)
+      - 8.8.8.8
+      - 8.8.4.4
+      # Cloudflare DNS (alternative)
+      - 1.1.1.1
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/"]
