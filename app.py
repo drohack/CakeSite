@@ -3,10 +3,10 @@ Main Flask application for the Marry, F, Kill Quiz.
 """
 # Fix Eventlet DNS resolution issues (must be before other imports)
 import eventlet
-eventlet.monkey_patch(socket=True, dns=True, time=True, select=True, thread=True, os=True)
-# Use system DNS resolver instead of Eventlet's broken green DNS
+eventlet.monkey_patch()
+# Configure Eventlet to use standard library DNS instead of green DNS
 import eventlet.support.greendns
-eventlet.support.greendns.resolve = None
+eventlet.support.greendns.resolve = lambda *args, **kwargs: __import__('socket').getaddrinfo(*args, **kwargs)
 
 import os
 import random
