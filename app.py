@@ -1,6 +1,10 @@
 """
 Main Flask application for the Marry, F, Kill Quiz.
 """
+# CRITICAL: Save original socket.gethostbyname BEFORE eventlet monkey-patches it
+import socket as _original_socket
+_gethostbyname = _original_socket.gethostbyname
+
 import os
 import random
 import uuid
@@ -15,9 +19,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Force urllib3 to use IPv4 only (fixes DNS issues in some Docker environments)
-import urllib3
-urllib3.util.connection.HAS_IPV6 = False
+# Fix urllib3 DNS resolution in Docker (known issue with eventlet/gunicorn)
+import urllib3.util.connection
+import socket as stdlib_socket
+
+# Override urllib3's socket creation to use stdlib DNS resolution
+_orig_create_connection = urllib3.util.connection.create_connection
+
+def patched_create_connection(address, *args, **kwargs):
+    """Resolve DNS using ORIGINAL socket (before eventlet patches), then connect."""
+    host, port = address
+    # Pre-resolve using the ORIGINAL socket function (before eventlet monkey-patch)
+    try:
+        ip = _gethostbyname(host)  # Use saved original function!
+        logger.debug(f"DNS resolved {host} -> {ip} using original socket")
+        return _orig_create_connection((ip, port), *args, **kwargs)
+    except Exception as e:
+        logger.error(f"DNS resolution failed for {host}: {e}")
+        # Fall back to original (will likely fail but with better error)
+        return _orig_create_connection(address, *args, **kwargs)
+
+urllib3.util.connection.create_connection = patched_create_connection
 from flask import Flask, render_template, request, jsonify, send_from_directory, session
 from flask_socketio import SocketIO, emit, join_room
 from flask_httpauth import HTTPBasicAuth
@@ -47,8 +69,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Initialize database
 init_db(app)
 
-# Initialize SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+# Initialize SocketIO (use gevent - better DNS than eventlet)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # Initialize HTTP Basic Auth
 auth = HTTPBasicAuth()
@@ -428,8 +450,8 @@ def proxy_image_url():
 
         logger.info(f"[PROXY-URL] Resolving DNS for {hostname}")
         try:
-            ip_address = socket.gethostbyname(hostname)
-            logger.info(f"[PROXY-URL] Resolved {hostname} to {ip_address}")
+            ip_address = _gethostbyname(hostname)  # Use original socket function
+            logger.info(f"[PROXY-URL] Resolved {hostname} to {ip_address} using original socket")
         except socket.gaierror as e:
             logger.error(f"[PROXY-URL] DNS resolution failed: {e}")
             return jsonify({'error': f'Could not resolve domain: {hostname}'}), 400
@@ -437,11 +459,11 @@ def proxy_image_url():
         # Build URL with IP but keep Host header
         url_with_ip = url.replace(hostname, ip_address)
 
-        logger.info(f"[PROXY-URL] Downloading from {url_with_ip}")
-        response = requests.get(url_with_ip, timeout=30, headers={
+        # Don't replace hostname in URL - let urllib3 DNS patch handle it
+        logger.info(f"[PROXY-URL] Downloading from {url} (DNS will be resolved by urllib3 patch)")
+        response = requests.get(url, timeout=30, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'image/*,*/*',
-            'Host': hostname  # Important: keep original hostname for virtual hosts
+            'Accept': 'image/*,*/*'
         }, allow_redirects=True, verify=True)
 
         logger.info(f"[PROXY-URL] Download complete. Status: {response.status_code}, Size: {len(response.content)} bytes")

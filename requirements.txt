@@ -9,4 +9,6 @@ Pillow==10.1.0
 pillow-avif-plugin==1.5.5
 gunicorn==21.2.0
 eventlet==0.33.3
+gevent==24.2.1
+gevent-websocket==0.10.1
 requests==2.31.0

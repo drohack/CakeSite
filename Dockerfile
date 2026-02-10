@@ -29,5 +29,5 @@ RUN mkdir -p images static/css static/js templates
 # Expose port
 EXPOSE 5000
 
-# Run the application with gunicorn and eventlet
-CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5000", "app:app"]
+# Run the application with gunicorn and gevent (better DNS than eventlet)
+CMD ["gunicorn", "--worker-class", "gevent", "-w", "1", "--bind", "0.0.0.0:5000", "app:app"]
