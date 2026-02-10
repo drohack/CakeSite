@@ -206,6 +206,12 @@ function setupDragAndDrop() {
 // Setup clipboard paste
 function setupClipboardPaste() {
     document.addEventListener('paste', async (e) => {
+        // Don't intercept paste in input/textarea fields
+        const activeElement = document.activeElement;
+        if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+            return; // Let normal paste work in form fields
+        }
+
         // Check for files first (supports multiple file copy from desktop)
         const files = e.clipboardData.files;
         if (files && files.length > 0) {
