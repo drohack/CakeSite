@@ -17,10 +17,11 @@ services:
       # Admin password for HTTP Basic Auth (default: admin123)
       - ADMIN_PASSWORD=admin123
     dns:
-      # Google DNS (reliable)
+      # Use host's DNS first (works in most environments)
+      - 127.0.0.11  # Docker's embedded DNS
+      # Fallback to public DNS
       - 8.8.8.8
       - 8.8.4.4
-      # Cloudflare DNS (alternative)
       - 1.1.1.1
     restart: unless-stopped
     healthcheck:
