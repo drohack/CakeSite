@@ -103,13 +103,33 @@ MarryFKill_Quiz/
 
 5. **Start the container**
 
+## Deployment (Production)
+
+This instance runs on an Unraid server (`root@Tower`) at `/mnt/user/appdata/CakeSite/`,
+where the repo is cloned and run via `docker-compose` (host port `8765` → container `5000`).
+It is served publicly at **https://cake.saltychart.net** via a reverse proxy.
+
+To deploy a code change (no database schema change), from the project directory on the server:
+
+```bash
+cd /mnt/user/appdata/CakeSite
+git pull origin main
+docker-compose build      # code is baked into the image (COPY . .), so a rebuild is required
+docker-compose up -d      # recreates the container — `docker-compose down` is NOT needed
+docker-compose logs -f    # optional: confirm a clean start
+```
+
+> Do **not** delete `data/fmk_quiz.db` for ordinary updates — that step in `UPDATE_GUIDE.md`
+> applies only to the one-time folder-schema migration.
+
 ## Usage Guide
 
 ### Accessing the Application
 
-- **Home Page**: `http://your-server-ip:5000/`
-- **Admin Panel**: `http://your-server-ip:5000/admin`
-- **User Poll**: `http://your-server-ip:5000/poll`
+- **Live site**: https://cake.saltychart.net
+- **Home Page**: `http://your-server-ip:8765/`
+- **Admin Panel**: `http://your-server-ip:8765/admin`
+- **User Poll**: `http://your-server-ip:8765/poll`
 
 ### Admin Workflow
 

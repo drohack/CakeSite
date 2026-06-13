@@ -33,6 +33,19 @@ python load_test.py        # edit BASE_URL / NUM_USERS at top of file
 
 There is **no test suite, linter, or build step** in this repo. `test_install.py` only checks that dependencies import. Verify changes by running the app and exercising the pages in a browser.
 
+### Deployment (production)
+
+- **Lives on**: an Unraid server (`root@Tower`) at `/mnt/user/appdata/CakeSite/` — the repo is cloned there and run via `docker-compose` (`build: .`, host port `8765` → container `5000`).
+- **Public URL**: https://cake.saltychart.net (fronted by a reverse proxy → host `8765`).
+- **Deploy a code change** (no DB schema change → do **not** delete `data/fmk_quiz.db`):
+  ```bash
+  cd /mnt/user/appdata/CakeSite
+  git pull origin main
+  docker-compose build      # code is baked in via `COPY . .`, so a rebuild is required
+  docker-compose up -d      # recreates the container; `docker-compose down` is NOT needed
+  ```
+- Only run `rm -f data/fmk_quiz.db` for the one-time folder-schema migration documented in `UPDATE_GUIDE.md` — never for ordinary code updates.
+
 ### Default credentials / env
 - Admin auth: user `admin`, password from `ADMIN_PASSWORD` (defaults to `admin123`).
 - `SECRET_KEY` env var for session signing (defaults to a dev value).
