@@ -1329,6 +1329,13 @@ def smashpass_admin():
     return render_template('smashpass_admin.html')
 
 
+@app.route('/smashpass/remote')
+@auth.login_required
+def smashpass_remote():
+    """Minimal remote control (Next / End) for the active Smash or Pass session."""
+    return render_template('smashpass_remote.html')
+
+
 @app.route('/smashpass/session/create', methods=['POST'])
 @auth.login_required
 def create_smashpass_session():

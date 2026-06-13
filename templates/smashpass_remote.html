@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Smash or Pass Remote - FMK Quiz{% endblock %}
+
+{% block extra_css %}
+<style>
+    .sp-remote-page {
+        max-width: 500px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        /* Fit the whole control on one screen; svh accounts for mobile browser chrome */
+        min-height: calc(100vh - 40px);
+        min-height: calc(100svh - 40px);
+        box-sizing: border-box;
+    }
+    /* Primary controls (status, counter, Next) centered in the upper area */
+    .sp-remote-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 16px;
+    }
+    .sp-remote-main h1 {
+        text-align: center;
+        margin: 0;
+        font-size: 1.6rem;
+    }
+    .sp-remote-status {
+        text-align: center;
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+    .sp-remote-progress {
+        text-align: center;
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin: 0;
+    }
+    #next-image {
+        font-size: 1.4rem;
+        padding: 24px;
+        width: 100%;
+    }
+    /* End is deliberately separated at the bottom and smaller, to avoid mis-taps */
+    .sp-remote-end {
+        padding-top: 16px;
+        margin-top: 16px;
+        border-top: 1px solid rgba(0, 0, 0, 0.15);
+    }
+    #end-session {
+        font-size: 1.05rem;
+        padding: 14px;
+        width: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sp-remote-page">
+    <div class="sp-remote-main">
+        <h1>Smash or Pass Remote</h1>
+        <div id="status-info" class="sp-remote-status">Loading…</div>
+        <div id="progress-counter" class="sp-remote-progress">– / –</div>
+        <button id="next-image" class="btn btn-primary" disabled>Next →</button>
+    </div>
+    <div class="sp-remote-end">
+        <button id="end-session" class="btn btn-danger" disabled>End Session</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/smashpass_remote.js') }}"></script>
+{% endblock %}

@@ -455,6 +455,13 @@ function setupSocketListeners() {
 
     socket.on('smashpass_completed', (data) => {
         showNotificationCenter('Session completed!', 'info');
+        // Make sure we target the session that just ended (e.g. when ended from
+        // the remote control on another device), then show the results view.
+        if (data && data.session_id) {
+            currentSessionId = data.session_id;
+        }
+        loadFinalResults();
+        // Refresh status text and disable Next/End now that it's completed.
         checkCurrentSession();
     });
 

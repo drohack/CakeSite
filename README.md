@@ -267,6 +267,7 @@ All data is stored in a SQLite database (`fmk_quiz.db`):
 - `GET /smashpass/session/current` - Get current session
 - `POST /smashpass/session/<id>/next` - Move to next image
 - `POST /smashpass/session/<id>/end` - End session
+- `GET /smashpass/remote` - Authenticated remote-control page (Next/End only) for the active session
 
 ### User Endpoints
 
